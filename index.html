@@ -1,0 +1,2541 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>칭찬 스티커</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <style>
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+    .shake { animation: shake 0.15s ease-in-out 0s 2; }
+    body { -webkit-tap-highlight-color: transparent; }
+    .theme-container { min-height: 460px; position: relative; background: #f8fafc; border-radius: 1.5rem; overflow: hidden; display: flex; justify-content: center; align-items: center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.05); padding: 15px;}
+    
+    .step-grid { display: grid; gap: 6px; width: 100%; height: 100%; grid-template-columns: repeat(auto-fit, minmax(40px, 1fr)); align-content: start; justify-content: center;}
+    
+    .rivals-cell { background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #94a3b8; font-size: 1.15rem; transition: all 0.3s; height: 46px;}
+    .rivals-cell.active { background: #6366f1; color: white; transform: scale(1.05); box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4); border: 2px solid #fff; }
+    .rivals-cell.lucky { border: 3px solid #fbbf24; animation: pulse 1.5s infinite; }
+    
+    .flower-cell { font-size: 1.8rem; display: flex; justify-content: center; align-items: center; transition: all 0.5s; height: 40px; position: relative;}
+    .flower-cell.empty { filter: grayscale(100%); opacity: 0.3; transform: scale(0.8); }
+    .flower-cell.active { transform: scale(1.1); filter: drop-shadow(0 4px 4px rgba(0,0,0,0.1)); }
+    .flower-cell.lucky { animation: pulse 1.5s infinite; }
+    
+    .rocket-cell { font-size: 1.8rem; display: flex; justify-content: center; align-items: center; transition: all 0.3s; height: 40px;}
+    .rocket-cell.lucky { animation: pulse 1.5s infinite; }
+    
+    .lego-cell { height: 35px; border-radius: 4px; border-top: 5px solid rgba(255,255,255,0.4); box-shadow: 1px 2px 4px rgba(0,0,0,0.2); transition: all 0.3s; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;}
+    .lego-cell.empty { background: #cbd5e1; opacity: 0.3; border-top: 5px solid rgba(255,255,255,0.1); box-shadow: none;}
+    .lego-cell.lucky { animation: pulse 1.5s infinite; border: 2px solid #fbbf24;}
+    
+    .tree-cell { font-size: 1.8rem; display: flex; justify-content: center; align-items: center; transition: all 0.5s; height: 40px;}
+    .tree-cell.empty { opacity: 0.4; }
+    .tree-cell.lucky { animation: pulse 1.5s infinite; }
+
+    .thermo-stack { display: flex; flex-direction: column-reverse; width: 60px; height: 100%; background: #e2e8f0; border-radius: 40px; padding: 4px; border: 4px solid #cbd5e1; box-shadow: inset 0 4px 10px rgba(0,0,0,0.1); gap: 2px;}
+    .thermo-tick { flex: 1; border-radius: 2px; transition: background 0.3s; display: flex; align-items: center; justify-content: center; font-size: 12px;}
+    .thermo-tick.empty { background: transparent; }
+    .thermo-tick.active { background: #ef4444; }
+    .thermo-tick.lucky { animation: pulse 1.5s infinite; border: 1px solid #fbbf24;}
+
+    .puzzle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(40px, 1fr)); width: 100%; height: 100%; position: absolute; inset: 0; z-index: 10; gap: 1px;}
+    .puzzle-piece { background: #f8fafc; border: 1px dashed #cbd5e1; transition: opacity 0.8s, transform 0.8s; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;}
+    .puzzle-piece.active { opacity: 0; transform: scale(1.2) rotate(4deg); } 
+    .puzzle-piece.lucky { border: 2px solid #fbbf24; animation: pulse 1.5s infinite; }
+
+    /* ===== 🌡️ 온도계 테마: 실제 온도계처럼 눈금을 따라 수은주가 차오릅니다 ===== */
+    .thermo-wrap { position: relative; width: 100%; height: 100%; }
+    .thermo-label { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 900; color: #ef4444; letter-spacing: 0.02em; }
+    .thermo-tube-outer { position: absolute; top: 42px; bottom: 76px; left: 50%; transform: translateX(-50%); width: 56px; background: linear-gradient(180deg, #f8fafc, #e2e8f0); border-radius: 30px; border: 4px solid #cbd5e1; overflow: visible; box-shadow: inset 0 4px 10px rgba(0,0,0,0.08); }
+    .thermo-tick { position: absolute; left: -2px; width: 8px; height: 2px; background: #cbd5e1; border-radius: 2px; }
+    .thermo-tick.major { width: 14px; background: #94a3b8; height: 2.5px; }
+    .thermo-mercury { position: absolute; bottom: 0; left: 3px; right: 3px; background: linear-gradient(180deg, #fca5a5, #dc2626); border-radius: 0 0 24px 24px; transition: height 0.8s cubic-bezier(.34,1.56,.64,1); }
+    .thermo-bulb { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 76px; height: 76px; border-radius: 50%; background: radial-gradient(circle at 32% 28%, #fca5a5, #dc2626 72%); border: 4px solid #cbd5e1; box-shadow: 0 4px 10px rgba(220,38,38,0.35); display:flex; align-items:center; justify-content:center; font-weight:900; color:#fff; font-size:13px; }
+    .thermo-lucky { position: absolute; right: -30px; transform: translateY(50%); font-size: 20px; animation: pulse 1.5s infinite; }
+
+    /* ===== 🌸 칭찬의 꽃 테마: 하늘+잔디 정원에 꽃이 자라납니다 ===== */
+    .garden-bed { position: absolute; inset: 0; background: linear-gradient(180deg, #dbeafe 0%, #dbeafe 58%, #86efac 58%, #4ade80 100%); border-radius: 1.25rem; overflow: hidden; }
+    .garden-flowers { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 3px; padding: 0 12px; }
+    .garden-flower { font-size: 1.55rem; transition: transform 0.3s; }
+    .garden-flower.bloom-in { animation: bloomPop 0.5s ease; }
+    .garden-flower.seed { font-size: 1.05rem; opacity: 0.55; filter: grayscale(30%); }
+    .garden-cloud { position: absolute; font-size: 1.2rem; opacity: 0.8; }
+    @keyframes bloomPop { 0% { transform: scale(0) translateY(12px); } 65% { transform: scale(1.35) translateY(-4px); } 100% { transform: scale(1) translateY(0); } }
+
+    /* ===== 🚀 꿈의 로켓 테마: 밤하늘을 가르며 목표(달)를 향해 날아갑니다 ===== */
+    .rocket-sky { position: absolute; inset: 0; background: linear-gradient(180deg, #0f172a, #4338ca 55%, #818cf8); border-radius: 20px; overflow: hidden; box-shadow: inset 0 4px 14px rgba(0,0,0,0.3); }
+    .rocket-star { position: absolute; font-size: 13px; opacity: 0.9; }
+    .rocket-current { position: absolute; left: 50%; bottom: 0; transform: translate(-50%, 50%); font-size: 28px; transition: bottom 0.8s cubic-bezier(.34,1.56,.64,1); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)); }
+    .rocket-goal { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 24px; }
+    .rocket-lucky { position: absolute; left: 50%; transform: translate(-50%, 50%); font-size: 18px; animation: pulse 1.5s infinite; }
+    .rocket-trail { position: absolute; left: 50%; bottom: 0; width: 3px; background: repeating-linear-gradient(180deg, rgba(255,255,255,0.35) 0 6px, transparent 6px 12px); transform: translateX(-50%); border-radius: 2px; }
+
+    /* ===== 🧱 레고 성 테마: 벽돌이 어긋나게 쌓이며 성벽처럼 올라갑니다 ===== */
+    .lego-wall { display: flex; flex-direction: column-reverse; gap: 4px; width: 100%; height: 100%; padding: 4px 8px; justify-content: flex-start; }
+    .lego-row { display: flex; gap: 4px; justify-content: center; }
+    .lego-row.offset { padding: 0 16px; }
+    .lego-brick2 { position: relative; height: 38px; flex: 1; max-width: 54px; border-radius: 6px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15), inset 0 3px 0 rgba(255,255,255,0.35), 1px 3px 5px rgba(0,0,0,0.2); }
+    .lego-brick2.empty { background: #e2e8f0; box-shadow: none; opacity: 0.5; }
+    .lego-brick2.lucky { animation: pulse 1.5s infinite; outline: 3px solid #fbbf24; outline-offset: 1px; }
+    .lego-brick2::before, .lego-brick2::after { content:''; position:absolute; top:-5px; width:11px; height:11px; border-radius:50%; background: inherit; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15); }
+    .lego-brick2::before { left: 22%; }
+    .lego-brick2::after { right: 22%; }
+
+    /* ===== 🌳 무럭무럭 나무 테마: 줄기가 자라고 열매가 하나씩 열립니다 ===== */
+    .tree-scene { position: absolute; inset: 0; }
+    .tree-ground { position: absolute; bottom: 0; left: 0; right: 0; height: 16px; background: linear-gradient(180deg,#86efac,#4ade80); border-radius: 0 0 1.25rem 1.25rem; }
+    .tree-trunk { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); width: 16px; background: linear-gradient(180deg,#a16207,#78350f); border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(.34,1.56,.64,1); }
+    .tree-canopy { position: absolute; left: 50%; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(circle at 32% 28%, #86efac, #16a34a 75%); transition: width 0.8s cubic-bezier(.34,1.56,.64,1), height 0.8s cubic-bezier(.34,1.56,.64,1), bottom 0.8s cubic-bezier(.34,1.56,.64,1); box-shadow: 0 6px 14px rgba(22,163,74,0.3); }
+    .tree-fruit { position: absolute; font-size: 1.05rem; transform: translate(-50%, -50%); }
+    .tree-fruit.lucky { font-size: 1.3rem; animation: pulse 1.5s infinite; }
+
+    /* ===== 🎈 열기구 여행 테마: 낮 하늘을 배경으로 열기구가 목표(무지개)를 향해 떠오릅니다 ===== */
+    .balloon-sky { position: absolute; inset: 0; background: linear-gradient(180deg, #7dd3fc, #bae6fd 55%, #e0f2fe); border-radius: 20px; overflow: hidden; box-shadow: inset 0 4px 14px rgba(0,0,0,0.08); }
+    .balloon-cloud-mark { position: absolute; font-size: 15px; opacity: 0.9; }
+    .balloon-current { position: absolute; left: 50%; bottom: 0; transform: translate(-50%, 40%); font-size: 34px; transition: bottom 0.8s cubic-bezier(.34,1.56,.64,1); filter: drop-shadow(0 6px 6px rgba(0,0,0,0.25)); }
+    .balloon-goal { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 28px; }
+    .balloon-lucky { position: absolute; left: 50%; transform: translate(-50%, 50%); font-size: 18px; animation: pulse 1.5s infinite; }
+
+    /* ===== 🐠 우리 집 어항 테마: 도장을 찍을 때마다 물고기가 한 마리씩 헤엄쳐 들어옵니다 ===== */
+    .fishtank-scene { position: absolute; inset: 0; background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 45%, #0284c7 100%); border-radius: 20px; overflow: hidden; box-shadow: inset 0 4px 14px rgba(0,0,0,0.15); }
+    .fishtank-bubble { position: absolute; font-size: 11px; opacity: 0.65; }
+    .fishtank-fish { position: absolute; font-size: 1.6rem; transform: translate(-50%, -50%); transition: opacity 0.4s; }
+    .fishtank-fish.lucky { font-size: 1.9rem; animation: pulse 1.5s infinite; }
+    .fishtank-plant { position: absolute; bottom: 10px; font-size: 1.5rem; }
+    .fishtank-sand { position: absolute; bottom: 0; left: 0; right: 0; height: 16px; background: linear-gradient(180deg, #fde68a, #f59e0b); border-radius: 0 0 20px 20px; }
+
+    /* ===== 🎂 케이크 조각 모으기 테마: 도장 찍을 때마다 케이크 한 조각이 채워집니다 ===== */
+    .cake-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .cake-plate { position: relative; width: 78%; max-width: 250px; aspect-ratio: 1 / 1; border-radius: 50%; box-shadow: 0 10px 26px rgba(0,0,0,0.18), inset 0 0 0 6px #fff; }
+    .cake-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 50%; width: 32%; height: 32%; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .cake-lucky-mark { position: absolute; font-size: 1.3rem; transform: translate(-50%,-50%); animation: pulse 1.5s infinite; }
+
+    /* ===== 🎲 보드게임 말판 테마: 뱀처럼 구불구불한 길을 따라 말이 한 칸씩 전진합니다 ===== */
+    .board-path { display: grid; gap: 6px; width: 100%; height: 100%; align-content: start; }
+    .board-cell { background: #fef9c3; border: 2px solid #fde68a; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #a16207; font-size: 1rem; height: 46px; }
+    .board-cell.filled { background: #fbbf24; color: #fff; border-color: #f59e0b; box-shadow: 0 3px 8px rgba(245,158,11,0.35); }
+    .board-cell.token { box-shadow: 0 0 0 3px #f59e0b, 0 4px 10px rgba(245,158,11,0.45); animation: pulse 1.2s infinite; font-size: 1.3rem; }
+    .board-cell.lucky { border-color: #fbbf24; box-shadow: 0 0 0 3px #fde68a; animation: pulse 1.5s infinite; }
+
+    /* ===== 🌌 별자리 만들기 테마: 도장 찍을 때마다 별이 켜지고 선으로 이어져 별자리가 완성됩니다 ===== */
+    .constellation-sky { position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, #1e293b, #0f172a 70%); border-radius: 20px; overflow: hidden; }
+    .constellation-star { position: absolute; font-size: 1.3rem; transform: translate(-50%, -50%); animation: pulse 2.2s infinite; }
+    .constellation-star.lucky { font-size: 1.6rem; }
+    .constellation-placeholder { position: absolute; width: 6px; height: 6px; border: 1px dashed rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%); }
+
+    /* ===== 🐾 발자국 산책로 테마: 발자국을 따라 집(목표)까지 걸어갑니다 ===== */
+    .footprint-path { position: absolute; inset: 0; background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%); border-radius: 20px; overflow: hidden; }
+    .footprint-mark { position: absolute; font-size: 1.3rem; transform: translate(-50%, -50%); opacity: 0.95; }
+    .footprint-mark.empty { opacity: 0.25; filter: grayscale(70%); }
+    .footprint-dest { position: absolute; top: 5%; left: 50%; transform: translateX(-50%); font-size: 2rem; }
+    .footprint-lucky { position: absolute; font-size: 1.5rem; animation: pulse 1.5s infinite; transform: translate(-50%, -50%); }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.1); } }
+    
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: center; padding: 20px; }
+    .modal.active { display: flex; }
+    .modal-content { background: white; width: 100%; max-width: 400px; border-radius: 1.5rem; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); overflow-y: auto;}
+    
+    #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1e293b; color: white; padding: 14px 28px; border-radius: 40px; font-weight: bold; transition: transform 0.3s; z-index: 200; opacity: 0; text-align: center; white-space: nowrap; }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    
+    #undoBar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(120px); background: #334155; color: white; padding: 16px 24px; border-radius: 20px; width: 90%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; transition: transform 0.3s; z-index: 150; }
+    #undoBar.show { transform: translateX(-50%) translateY(0); }
+    .progress-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: #fbbf24; border-radius: 0 0 20px 20px; width: 100%; }
+    
+    .claim-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.85); z-index: 50; display: flex; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(4px); border-radius: 1.5rem; }
+
+    #rouletteContainer { position: relative; width: 260px; height: 260px; margin: 0 auto; border-radius: 50%; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.1); border: 8px solid white;}
+    #rouletteCanvas { width: 100%; height: 100%; transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1); }
+    .roulette-pointer { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 30px solid #ef4444; z-index: 10; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));}
+
+    /* 🚀 동기화 상태 인디케이터 */
+    #syncIndicator { position: fixed; top: 10px; left: 50%; transform: translateX(-50%) translateY(-60px); background: #1e293b; color: white; padding: 6px 16px; border-radius: 20px; font-size: 11px; font-weight: 900; z-index: 300; transition: transform 0.25s, background 0.25s; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
+    #syncIndicator.show { transform: translateX(-50%) translateY(0); }
+    #syncIndicator.error { background: #dc2626; }
+    #syncIndicator .dot { width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; animation: pulse 1s infinite; }
+    #syncIndicator.error .dot { background: #fff; animation: none; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans pb-24">
+
+  <div id="loginScreen" class="fixed inset-0 bg-indigo-600 z-[999] flex flex-col justify-center items-center p-6">
+    <h1 class="text-4xl text-white font-black mb-8">✨ 칭찬 스티커</h1>
+    <div class="bg-white p-6 rounded-3xl w-full max-w-sm space-y-4 shadow-2xl">
+      <input type="password" id="loginPw" placeholder="엄빠용 비밀번호" class="w-full p-4 bg-slate-100 rounded-2xl outline-none text-center font-black text-2xl tracking-widest text-slate-700">
+      <div class="flex gap-3 mt-4">
+        <button id="btnParentLogin" onclick="attemptLogin('parent')" class="flex-1 py-4 bg-indigo-500 hover:bg-indigo-600 text-white font-black rounded-2xl active:scale-95 transition shadow-md">엄빠 접속</button>
+        <button id="btnChildLogin" onclick="attemptLogin('child')" class="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl active:scale-95 transition shadow-md">강천 접속</button>
+      </div>
+      <p id="loginError" class="text-red-500 text-sm font-bold text-center hidden mt-2"></p>
+    </div>
+  </div>
+
+  <audio id="soundFanfare" src="https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" preload="auto"></audio>
+
+  <!-- 🚀 캡처용 카드: 화면 밖(-9999px)에 렌더링해서 html2canvas로 캡처만 하고 사용자에겐 안 보이게 함 -->
+  <div id="shareCardContainer" style="position:fixed; left:-9999px; top:0; z-index:-1;"></div>
+
+  <div id="syncIndicator"><span class="dot"></span><span id="syncIndicatorText">동기화 중...</span></div>
+
+  <div id="mainApp" class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative hidden">
+    <div class="p-5 border-b bg-indigo-600 text-white sticky top-0 z-50">
+      <div class="flex flex-col mb-3 gap-3">
+        <h1 class="text-2xl font-black tracking-tighter">✨ 칭찬스티커</h1>
+        <div class="flex gap-2">
+          <span class="text-[10px] font-bold bg-white/20 px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/30 transition shadow-sm flex items-center" id="userTitle" onclick="openModal('levelModal')">...</span>
+          <button onclick="openItemShop()" class="text-[10px] font-bold bg-pink-500/90 px-3 py-1.5 rounded-full cursor-pointer hover:bg-pink-50 transition shadow-sm active:scale-95 flex items-center">🎒 보관함</button>
+          
+          <button onclick="openWishlistModal()" class="text-[10px] font-bold bg-amber-500 px-3 py-1.5 rounded-full cursor-pointer hover:bg-amber-600 transition shadow-sm active:scale-95 flex items-center text-white">🙏 소원수리함</button>
+          <button onclick="openShareCard()" class="text-[10px] font-bold bg-emerald-500 px-3 py-1.5 rounded-full cursor-pointer hover:bg-emerald-600 transition shadow-sm active:scale-95 flex items-center text-white">📤 공유</button>
+          <button onclick="logout()" class="text-[10px] font-bold bg-slate-800/50 px-3 py-1.5 rounded-full cursor-pointer hover:bg-slate-800 transition shadow-sm active:scale-95 flex items-center">로그아웃</button>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="flex-1 bg-white/20 h-3 rounded-full overflow-hidden">
+          <div id="levelBar" class="bg-yellow-400 h-full transition-all duration-1000" style="width: 0%"></div>
+        </div>
+        <span class="text-[11px] font-black" id="lifetimeScore">0 pts</span>
+      </div>
+    </div>
+
+    <div class="p-5 space-y-6">
+      
+      <div class="space-y-1">
+        <div class="flex justify-between items-start">
+          <div class="flex-1">
+            <button onclick="openBoardHistoryModal()" class="text-sm font-bold text-indigo-400 hover:text-indigo-600 flex items-center gap-1 transition">
+              <span id="boardTitle">...</span> <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <h3 id="rewardText" class="text-3xl font-black text-slate-800 leading-tight mt-1">...</h3>
+          </div>
+          <div class="flex flex-col items-end gap-2">
+            <select id="themeSelect" onchange="changeTheme()" class="text-xs bg-slate-100 border-none rounded-lg px-2 py-1 outline-none font-bold text-slate-600">
+              <option value="rivals">라이벌</option>
+              <option value="thermometer">온도계</option>
+              <option value="flower">칭찬의 꽃</option>
+              <option value="rocket">꿈의 로켓</option>
+              <option value="lego">레고 성</option>
+              <option value="puzzle">비밀 퍼즐</option>
+              <option value="tree">무럭무럭 나무</option>
+              <option value="balloon">열기구 여행</option>
+              <option value="fishtank">우리 집 어항</option>
+              <option value="cake">케이크 조각 모으기</option>
+              <option value="boardgame">보드게임 말판</option>
+              <option value="constellation">별자리 만들기</option>
+              <option value="footprint">발자국 산책로</option>
+            </select>
+            <div id="streakBadge" class="hidden bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-xs font-black border border-orange-200 shadow-sm">
+              🔥 <span id="streakCount">0</span> COMBO
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center pb-2">
+          <div class="text-5xl font-black text-indigo-600 mt-1 tabular-nums">
+            <span id="currentScore">0</span><span class="text-2xl text-slate-200 mx-2">/</span><span id="targetScore" class="text-3xl text-slate-300">30</span>
+          </div>
+          <div class="mt-2 inline-flex items-center gap-1 bg-indigo-50 px-3 py-1 rounded-full">
+            <span class="text-[10px] font-bold text-indigo-400">BEST 👍</span>
+            <span class="text-[10px] font-black text-indigo-600" id="bestPraise">...</span>
+          </div>
+          
+          <div id="specialPraiseBanner" class="hidden mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center animate-pulse">
+            <span class="text-[11px] font-black text-amber-600 tracking-wider">🌟 오늘의 스페셜 미션 (성공 시 도장 2개!) 🌟</span>
+            <p id="specialPraiseText" class="text-sm font-black text-slate-700 mt-0.5">...</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="visualizer" class="theme-container" onclick="openModal('logModal')"></div>
+
+      <div id="parentControls" class="hidden space-y-4">
+        <div id="reasonArea" class="hidden p-5 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 space-y-4 transition-all">
+          <div class="flex gap-2">
+            <select id="reasonSelect" class="flex-1 p-4 rounded-2xl border-none shadow-sm font-bold text-slate-700 outline-none" onchange="vibrate()"></select>
+            <button id="btnNewReason" onclick="promptAddReason()" class="bg-slate-200 px-4 rounded-2xl text-xs font-black text-slate-500 whitespace-nowrap active:scale-95 transition">신규 사유</button>
+          </div>
+          <input type="text" id="detailInput" class="w-full p-4 rounded-2xl border-none shadow-sm text-sm" placeholder="상세 설명을 적어주세요 (선택)">
+          <button id="submitBtn" onclick="executeStamp()" class="w-full py-5 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2">
+            <span id="btnText"></span>
+          </button>
+        </div>
+        
+        <div class="flex gap-2">
+          <button id="btnPraise" onclick="setMode('praise')" class="flex-1 py-5 bg-white border-2 border-blue-500 text-blue-500 font-black rounded-2xl shadow-sm active:scale-95 transition text-sm">칭찬하기 (+)</button>
+          <button id="btnPenalty" onclick="setMode('penalty')" class="flex-1 py-5 bg-white border-2 border-red-500 text-red-500 font-black rounded-2xl shadow-sm active:scale-95 transition text-sm">차감하기 (-)</button>
+          <button id="btnRecover" onclick="setMode('recover')" class="flex-1 py-5 bg-white border-2 border-amber-500 text-amber-500 font-black rounded-2xl shadow-sm active:scale-95 transition text-sm">만회하기 (↩️)</button>
+        </div>
+      </div>
+
+      <div id="childControls" class="hidden">
+        <button onclick="openRequestModal()" class="w-full py-5 bg-emerald-500 text-white font-black rounded-3xl shadow-xl text-lg hover:bg-emerald-600 transition active:scale-95">🙋‍♀️ 칭찬 도장 요청하기</button>
+      </div>
+
+      <div id="parentAdmin" class="hidden grid grid-cols-4 gap-1 mt-4">
+        <button onclick="openLuckyBoxModal()" class="bg-pink-50 text-pink-600 py-3 rounded-2xl text-[11px] font-black border border-pink-100 active:scale-95 transition">🎁 럭키박스</button>
+        <button onclick="openSpecialPraiseModal()" class="bg-amber-50 text-amber-600 py-3 rounded-2xl text-[11px] font-black border border-amber-100 active:scale-95 transition">🌟 스페셜 미션</button>
+        <button onclick="openEditBoardModal()" class="bg-slate-50 text-slate-600 py-3 rounded-2xl text-[11px] font-black border border-slate-200 active:scale-95 transition">⚙️ 판 관리</button>
+        <button onclick="openReportModal()" class="bg-blue-50 text-blue-600 py-3 rounded-2xl text-[11px] font-black border border-blue-100 active:scale-95 transition">📈 리포트</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="reportModal" class="modal" onclick="closeModalOnBg(event, 'reportModal')">
+    <div class="modal-content overflow-hidden flex flex-col h-[85vh]">
+      <div class="p-5 bg-blue-500 text-white font-black flex justify-between items-center shrink-0">
+        <h3>📈 우리 아이 칭찬 리포트</h3><button onclick="closeModal('reportModal')" class="text-xl">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto bg-slate-50 flex-1 space-y-6" id="reportContent"></div>
+    </div>
+  </div>
+
+  <div id="itemShopModal" class="modal" onclick="closeModalOnBg(event, 'itemShopModal')">
+    <div class="modal-content overflow-hidden flex flex-col h-[85vh]">
+      <div class="p-5 bg-pink-500 text-white font-black flex justify-between items-center shrink-0">
+        <h3>🎒 보관함</h3><button onclick="closeModal('itemShopModal')" class="text-xl">✕</button>
+      </div>
+      <div class="flex bg-white shrink-0 border-b">
+        <button id="mainTabReward" onclick="switchMainTab('보상')" class="flex-1 py-3 font-black text-indigo-600 border-b-2 border-indigo-500">🎁 보상함</button>
+        <button id="mainTabRandom" onclick="switchMainTab('랜덤박스')" class="flex-1 py-3 font-bold text-slate-400 border-b-2 border-transparent">🎲 랜덤박스</button>
+      </div>
+      <div class="flex bg-slate-100 shrink-0">
+        <button id="tabUnused" onclick="switchItemTab('unused')" class="flex-1 py-2 text-sm font-black text-pink-600 border-b-2 border-pink-500 bg-white">사용 전</button>
+        <button id="tabUsed" onclick="switchItemTab('used')" class="flex-1 py-2 text-sm font-bold text-slate-400 border-b-2 border-transparent">사용 후</button>
+      </div>
+      <ul id="itemList" class="p-5 space-y-3 overflow-y-auto bg-slate-50 flex-1"></ul>
+    </div>
+  </div>
+
+  <div id="rouletteModal" class="modal" onclick="closeModalOnBg(event, 'rouletteModal')">
+    <div class="modal-content p-6 flex flex-col items-center">
+      <h3 class="font-black text-2xl text-pink-600 mb-6">🎰 두근두근 룰렛 타임!</h3>
+      <div id="rouletteContainer">
+        <div class="roulette-pointer"></div>
+        <canvas id="rouletteCanvas" width="300" height="300"></canvas>
+      </div>
+      <div id="rouletteLegend" class="flex flex-wrap gap-2 mt-6 justify-center text-xs font-bold w-full"></div>
+      <button id="btnSpinRoulette" onclick="spinRoulette()" class="w-full py-4 mt-6 bg-pink-500 text-white font-black rounded-2xl shadow-lg active:scale-95 text-lg transition">돌리기 시작!</button>
+    </div>
+  </div>
+
+  <div id="wishlistModal" class="modal" onclick="closeModalOnBg(event, 'wishlistModal')">
+    <div class="modal-content overflow-hidden flex flex-col h-[75vh]">
+      <div class="p-5 bg-amber-500 text-white font-black flex justify-between items-center shrink-0">
+        <h3>🙏 소원수리함</h3><button onclick="closeModal('wishlistModal')" class="text-xl">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto bg-slate-50 flex-1 space-y-4">
+        <div id="childWishInputArea" class="hidden space-y-2 bg-white p-4 rounded-2xl shadow-sm border">
+          <p class="text-xs font-black text-amber-500">이루고 싶은 소원을 적어보세요! 🧞‍♂️</p>
+          <input type="text" id="wishInput" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm font-bold" placeholder="예: 이번 주말에 보드게임 카페 가기!">
+          <button id="btnSubmitWish" onclick="submitWish()" class="w-full py-3 bg-amber-500 text-white font-black rounded-xl text-sm active:scale-95 transition shadow-md">소원 상자에 넣기 ✉️</button>
+        </div>
+        <div class="space-y-2">
+          <p class="text-xs font-black text-slate-400">우리의 소원 저장소</p>
+          <ul id="wishListContainer" class="space-y-3"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="specialPraiseModal" class="modal" onclick="closeModalOnBg(event, 'specialPraiseModal')">
+    <div class="modal-content p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-black text-xl text-amber-600">🌟 오늘의 스페셜 미션 설정</h3>
+        <button onclick="closeModal('specialPraiseModal')" class="text-xl text-slate-400">✕</button>
+      </div>
+      <p class="text-xs font-bold text-slate-400">오늘 집중해서 정복할 칭찬 사유를 지정해 주세요.<br>아이가 해당 미션을 성공하면 <span class="text-amber-500 font-black">도장 2개</span>가 즉시 부착됩니다!</p>
+      <select id="buffSelect" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm"></select>
+      <input type="text" id="newBuffInput" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm font-bold" placeholder="또는 직접 새로운 미션 입력">
+      <button id="btnSaveBuff" onclick="saveDailyBuff()" class="w-full py-4 bg-amber-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">미션 등록 및 가동 🌟</button>
+      <button id="btnClearBuff" onclick="clearDailyBuff()" class="w-full py-2 bg-slate-100 text-slate-400 font-bold text-xs rounded-xl">미션 해제</button>
+    </div>
+  </div>
+
+  <div id="levelModal" class="modal" onclick="closeModalOnBg(event, 'levelModal')">
+    <div class="modal-content p-6 space-y-4 text-center">
+      <h3 class="font-black text-xl text-indigo-600 border-b pb-3">🏅 라이벌 레벨 안내</h3>
+      <div class="text-sm font-bold space-y-3 text-slate-600 text-left px-4">
+        <p>🌱 0~50점: 신입 라이벌</p>
+        <p>🌟 51~100점: 유망주</p>
+        <p>⚔️ 101~150점: 베테랑</p>
+        <p>🏅 151~200점: 엘리트</p>
+        <p>👑 201~250점: 마스터</p>
+        <p>🔥 251~300점: 전설의 라이벌</p>
+        <p class="text-indigo-500">🏆 301점~: 월드 챔피언</p>
+      </div>
+      <button onclick="closeModal('levelModal')" class="w-full py-3 bg-slate-200 rounded-xl font-black text-slate-500 active:scale-95 transition">닫기</button>
+    </div>
+  </div>
+
+  <div id="editBoardModal" class="modal" onclick="closeModalOnBg(event, 'editBoardModal')">
+    <div class="modal-content p-6 space-y-4">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-black text-xl text-slate-700">⚙️ 칭찬판 설정</h3>
+        <button onclick="closeModal('editBoardModal')" class="text-xl text-slate-400">✕</button>
+      </div>
+      <div class="space-y-1">
+        <label class="text-[10px] font-bold text-slate-400">목표 개수</label>
+        <input type="number" id="editTarget" class="w-full p-4 bg-slate-100 rounded-2xl outline-none" placeholder="예: 30">
+      </div>
+      <div class="space-y-1">
+        <label class="text-[10px] font-bold text-slate-400">목표 보상</label>
+        <input type="text" id="editReward" class="w-full p-4 bg-slate-100 rounded-2xl outline-none" placeholder="예: 레고">
+      </div>
+      <button id="btnSaveEdit" onclick="saveBoardEdit()" class="w-full py-4 bg-indigo-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">판 설정 저장</button>
+      <hr class="my-4 border-slate-200">
+      <h4 class="font-black text-lg text-slate-700">🔢 칭찬 사유별 스티커 개수</h4>
+      <p class="text-xs text-slate-400 mb-2 font-bold">사유마다 한 번에 줄 스티커 개수를 다르게 정할 수 있어요.</p>
+      <div id="reasonCountList" class="space-y-2 max-h-52 overflow-y-auto"></div>
+      <hr class="my-4 border-slate-200">
+      <h4 class="font-black text-lg text-slate-700">✨ 새로운 칭찬판 시작</h4>
+      <p class="text-xs text-slate-400 mb-2 font-bold">현재 판을 끝내고 다음 회차로 넘어갑니다.</p>
+      <button onclick="openNewBoardUI(); closeModal('editBoardModal');" class="w-full py-3 border-2 border-dashed border-indigo-200 text-indigo-500 font-black rounded-xl active:scale-95 transition">새로운 칭찬판 시작하기</button>
+      <hr class="my-4 border-slate-200">
+      <h4 class="font-black text-lg text-slate-700">🔐 앱 비밀번호 변경</h4>
+      <input type="password" id="oldPwInput" placeholder="현재 비밀번호" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-2 font-bold tracking-widest text-center">
+      <input type="password" id="newPwInput" placeholder="새 비밀번호" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-2 font-bold tracking-widest text-center">
+      <input type="password" id="newPwConfirmInput" placeholder="새 비밀번호 확인" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-3 font-bold tracking-widest text-center">
+      <button id="btnChangePassword" onclick="changePassword()" class="w-full py-3 bg-slate-800 text-white font-black rounded-xl shadow-md active:scale-95 transition">비밀번호 변경하기</button>
+    </div>
+  </div>
+
+  <div id="boardHistoryModal" class="modal" onclick="closeModalOnBg(event, 'boardHistoryModal')">
+    <div class="modal-content overflow-hidden">
+      <div class="p-5 bg-indigo-600 text-white font-black flex justify-between items-center">
+        <h3>📚 전체 회차 기록</h3><button onclick="closeModal('boardHistoryModal')" class="text-xl">✕</button>
+      </div>
+      <ul id="boardHistoryList" class="p-5 space-y-3 overflow-y-auto bg-slate-50" style="max-height: 60vh;"></ul>
+    </div>
+  </div>
+
+  <div id="logModal" class="modal" onclick="closeModalOnBg(event, 'logModal')">
+    <div class="modal-content overflow-hidden flex flex-col h-[70vh]">
+      <div class="p-5 border-b flex justify-between items-center bg-white shrink-0">
+        <h3 class="font-black text-slate-700">📜 칭찬 히스토리</h3>
+        <button onclick="closeModal('logModal')" class="p-2 text-slate-400">✕</button>
+      </div>
+      <ul id="logList" class="p-5 overflow-y-auto space-y-3 bg-slate-50 flex-1"></ul>
+    </div>
+  </div>
+
+  <div id="luckyBoxModal" class="modal">
+    <div class="modal-content p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-black text-xl text-pink-600">🎁 럭키박스 (룰렛) 설정</h3>
+        <button onclick="closeModal('luckyBoxModal')" class="text-xl text-slate-400">✕</button>
+      </div>
+      <select id="luckyStepSelect" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm" onchange="vibrate()"></select>
+      <div class="bg-pink-50 p-4 rounded-2xl border border-pink-100">
+        <p class="text-xs font-bold text-pink-500 mb-2">당첨될 보상을 한 줄에 하나씩 적어주세요</p>
+        <textarea id="luckyBoxTextarea" rows="5" class="w-full p-3 bg-white rounded-xl outline-none text-sm border border-slate-200 font-bold" placeholder="게임 10분 추가&#10;용돈 1000원:50&#10;아이스크림 사주기:20"></textarea>
+        <p class="text-[10px] text-slate-400 font-bold mt-1.5 leading-relaxed">💡 "이름:비율" 형식으로 당첨 확률(%)을 지정할 수 있어요.<br>비율을 안 적으면 남은 확률을 똑같이 나눠 가져요. 전부 안 적으면 모두 1/N 확률이에요.</p>
+      </div>
+      <button id="btnSaveLucky" onclick="saveLuckyBox()" class="w-full py-4 bg-pink-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">저장하기</button>
+    </div>
+  </div>
+
+  <div id="requestModal" class="modal" onclick="closeModalOnBg(event, 'requestModal')">
+    <div class="modal-content overflow-hidden p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-black text-lg text-emerald-600">🙋 어떤 칭찬을 받을까요?</h3>
+        <button onclick="closeModal('requestModal')" class="text-xl text-slate-400">✕</button>
+      </div>
+      <select id="reqReasonSelect" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold" onchange="vibrate()"></select>
+      <input type="text" id="reqDetailInput" placeholder="더 자랑하고 싶은 내용 (선택)" class="w-full p-4 bg-slate-100 rounded-2xl outline-none text-sm">
+      <button id="btnSendReq" onclick="submitRequest()" class="w-full py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg mt-2 active:scale-95 transition">부모님께 요청 보내기</button>
+    </div>
+  </div>
+
+  <div id="toast">메시지</div>
+  <div id="undoBar">
+    <div class="text-sm"><p class="font-black">도장 쾅! 완료</p><p class="text-[10px] text-slate-400">잘못 찍었다면 취소하세요</p></div>
+    <button onclick="cancelUndo()" class="bg-indigo-500 px-4 py-2 rounded-xl text-xs font-black active:scale-95 transition">UNDO</button>
+    <div class="progress-bar" id="undoProgress"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script>
+    // 🔥 =====================================================================
+    // Firebase 설정: 아래 값을 본인의 Firebase 프로젝트 설정값으로 반드시 바꿔주세요.
+    // (Firebase 콘솔 → 프로젝트 설정 → 일반 → 내 앱 → SDK 설정 및 구성 에서 확인)
+    const firebaseConfig = {
+  apiKey: "AIzaSyAW-ItTRaZj4fWs57g_vpF-FGWgsKIEpj8",
+  authDomain: "praise-sticker-756b4.firebaseapp.com",
+  projectId: "praise-sticker-756b4",
+  storageBucket: "praise-sticker-756b4.firebasestorage.app",
+  messagingSenderId: "271275758860",
+  appId: "1:271275758860:web:4c1c430cb1c9329426e529"
+};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    let __fbReady = null;
+    function ensureAuth() {
+      if (__fbReady) return __fbReady;
+      __fbReady = new Promise((resolve, reject) => {
+        const unsub = auth.onAuthStateChanged(user => {
+          if (user) { unsub(); resolve(user); }
+        });
+        auth.signInAnonymously().catch(err => { reject(err); });
+      });
+      return __fbReady;
+    }
+
+    // 날짜 포맷 헬퍼 (기존 구글시트 버전과 동일한 표시 형식 유지)
+    function fmtShort(iso) { // MM/dd HH:mm (칭찬 기록용)
+      const d = new Date(iso);
+      const p = n => String(n).padStart(2, '0');
+      return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    function fmtFull(iso) { // yyyy-MM-dd HH:mm (보관함/소원용)
+      const d = new Date(iso);
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    function titleForScore(score) {
+      const titles = [
+        {min:0,name:"신입 라이벌 🌱"},{min:51,name:"유망주 🌟"},{min:101,name:"베테랑 ⚔️"},
+        {min:151,name:"엘리트 🏅"},{min:201,name:"마스터 👑"},{min:251,name:"전설의 라이벌 🔥"},{min:301,name:"월드 챔피언 🏆"}
+      ];
+      return [...titles].reverse().find(t => score >= t.min).name;
+    }
+
+    async function getStateDoc() {
+      const ref = db.collection('meta').doc('state');
+      const snap = await ref.get();
+      if (!snap.exists) {
+        const initial = {
+          praiseReasons: [{name:'숙제하기', count:1}, {name:'약속 지키기', count:1}, {name:'동생 도와주기', count:1}],
+          penaltyReasons: ['약속 어기기', '동생 괴롭히기'],
+          dailyBuff: '',
+          lifetimeScore: 0,
+          parentPassword: '12345'
+        };
+        await ref.set(initial);
+        return initial;
+      }
+      return snap.data();
+    }
+
+    // ===== 🔥 인증 =====
+    async function authenticate(password, role) {
+      await ensureAuth();
+      const state = await getStateDoc();
+      if (role === 'parent' && password !== (state.parentPassword || '12345')) {
+        throw new Error('비밀번호가 틀렸습니다.');
+      }
+      return getAppData(null, role);
+    }
+
+    async function changeAppPassword(oldPw, newPw) {
+      await ensureAuth();
+      const state = await getStateDoc();
+      if (oldPw !== (state.parentPassword || '12345')) throw new Error('현재 비밀번호가 틀렸습니다.');
+      await db.collection('meta').doc('state').update({ parentPassword: newPw });
+      return true;
+    }
+
+    // ===== 🔥 데이터 조회 =====
+    async function getAppData(targetRound, role) {
+      await ensureAuth();
+      const isParent = (role === 'parent');
+      const userName = isParent ? '엄빠' : '강천';
+      const state = await getStateDoc();
+
+      const boardsSnap = await db.collection('boards').orderBy('round').get();
+      let boards = [];
+      boardsSnap.forEach(d => boards.push(d.data()));
+
+      let currentBoard = null;
+      if (targetRound) currentBoard = boards.find(b => b.round == targetRound) || null;
+      else currentBoard = boards.find(b => b.status === '진행중' || b.status === '완료') || null;
+      if (!currentBoard && boards.length > 0) currentBoard = boards[boards.length - 1];
+      if (!currentBoard) {
+        await db.collection('boards').doc('1').set({ round:1, targetScore:30, reward:'첫 보상', theme:'rivals', status:'진행중', luckyStep:'', luckyText:'' });
+        return getAppData(1, role);
+      }
+
+      const logsSnap = await db.collection('logs').where('round','==',currentBoard.round).orderBy('date','asc').get();
+      let currentScore = 0, logs = [], countsByReason = {};
+      logsSnap.forEach(d => {
+        const l = d.data();
+        const score = Number(l.score);
+        currentScore += score;
+        if (score > 0 && l.executor !== '시스템') countsByReason[l.reason] = (countsByReason[l.reason]||0) + 1;
+        logs.push({
+          id: d.id, date: fmtShort(l.date), reason: l.reason, detail: l.detail || '', executor: l.executor,
+          score: score > 0 ? `+${score}` : score, rawScore: score, runningTotal: currentScore, ts: new Date(l.date).getTime()
+        });
+      });
+      logs.sort((a,b) => b.ts - a.ts);
+      let bestPraise = Object.keys(countsByReason).length > 0 ? Object.keys(countsByReason).reduce((a,b) => countsByReason[a] > countsByReason[b] ? a : b) : "아직 없음";
+      let currentStreak = 0;
+      for (const l of logs) { if (l.executor === '시스템') continue; if (l.rawScore > 0) currentStreak++; else if (l.rawScore < 0) break; }
+
+      const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
+      let items = [];
+      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스' }); });
+
+      const wishesSnap = await db.collection('wishes').orderBy('date','desc').get();
+      let wishes = [];
+      wishesSnap.forEach(d => { const w = d.data(); wishes.push({ id:d.id, round:w.round, text:w.text, date:fmtShort(w.date), status:w.status, comment:w.comment||'' }); });
+
+      const praiseList = (state.praiseReasons || []).map(r => r.name);
+      const praiseCounts = {};
+      (state.praiseReasons || []).forEach(r => praiseCounts[r.name] = r.count || 1);
+      const hallOfFame = boards.filter(b => b.status === '완료' || b.status === '보상 수령 완료');
+
+      return {
+        userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
+        boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
+        praiseCounts, parentEmails: [], bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
+        dailyBuff: state.dailyBuff || '', role, stats: null
+      };
+    }
+
+    // ===== 🔥 도장/보상 =====
+    async function grantRewardIfEligible(round) {
+      const boardRef = db.collection('boards').doc(String(round));
+      const boardSnap = await boardRef.get();
+      if (!boardSnap.exists) return false;
+      const board = boardSnap.data();
+      if (board.status === '보상 수령 완료') return false;
+
+      const logsSnap = await db.collection('logs').where('round','==',round).get();
+      let score = 0;
+      logsSnap.forEach(d => score += Number(d.data().score));
+      if (score < board.targetScore) return false;
+
+      const itemsSnap = await db.collection('items').where('round','==',round).where('type','==','보상').get();
+      if (!itemsSnap.empty) return false;
+
+      await boardRef.update({ status: '보상 수령 완료' });
+      await db.collection('items').add({ round, name: board.reward, obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'보상' });
+      return true;
+    }
+
+    async function addStampRecord(round, reason, detail, score, executor, role) {
+      await ensureAuth();
+      const logsSnap = await db.collection('logs').where('round','==',round).orderBy('date','asc').get();
+      let curScore = 0;
+      const roundLogs = [];
+      logsSnap.forEach(d => { const l = d.data(); curScore += Number(l.score); roundLogs.push(l); });
+
+      if (score < 0 && curScore <= 0) return { data: await getAppData(round, role), rowsAdded: [] };
+
+      const state = await getStateDoc();
+      let finalScore = score, finalReason = reason;
+      if (score > 0 && reason === state.dailyBuff && executor !== '시스템') {
+        finalScore = score + 1;
+        finalReason = `🌟 [스페셜 미션 달성!] ${reason}`;
+      }
+
+      let streak = 0;
+      for (let i = roundLogs.length - 1; i >= 0; i--) {
+        if (roundLogs[i].executor === '시스템') continue;
+        if (Number(roundLogs[i].score) > 0) streak++; else break;
+      }
+
+      const now = new Date();
+      const addedIds = [];
+      const doc1 = await db.collection('logs').add({ round, date: now.toISOString(), reason: finalReason, detail: detail || '', executor, score: finalScore });
+      addedIds.push(doc1.id);
+
+      let isBonusGiven = false;
+      if (score > 0) {
+        streak += 1;
+        if (streak > 0 && streak % 5 === 0) {
+          const now2 = new Date(now.getTime() + 1000);
+          const doc2 = await db.collection('logs').add({ round, date: now2.toISOString(), reason: `🔥 연속 칭찬 ${streak}회 보너스!`, detail:'대단해요!', executor:'시스템', score:1 });
+          addedIds.push(doc2.id);
+          isBonusGiven = true;
+        }
+      }
+
+      if (finalScore > 0) {
+        await db.collection('meta').doc('state').update({ lifetimeScore: firebase.firestore.FieldValue.increment(finalScore) });
+      }
+
+      const boardSnap = await db.collection('boards').doc(String(round)).get();
+      const board = boardSnap.data();
+      const luckyStep = Number(board.luckyStep);
+      const totalAdded = finalScore + (isBonusGiven ? 1 : 0);
+      if (luckyStep > 0 && curScore < luckyStep && (curScore + totalAdded) >= luckyStep) {
+        await db.collection('items').add({ round, name:'룰렛 추첨권', obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스' });
+      }
+
+      const newlyCompleted = await grantRewardIfEligible(round);
+      return { data: await getAppData(round, role), rowsAdded: addedIds, newlyCompleted };
+    }
+
+    async function recoverLastPenalty(round, role) {
+      await ensureAuth();
+      const logsSnap = await db.collection('logs').where('round','==',round).orderBy('date','asc').get();
+      const docs = logsSnap.docs;
+      let target = null;
+      for (let i = docs.length - 1; i >= 0; i--) {
+        if (Number(docs[i].data().score) < 0) { target = docs[i]; break; }
+      }
+      if (!target) throw new Error('만회할 차감 내역이 스티커판에 존재하지 않습니다.');
+      await target.ref.update({ reason: target.data().reason + ' (만회 완료 ↩️)', score: 0 });
+      await db.collection('logs').add({ round, date: new Date().toISOString(), reason:'✨ 만회하기 성공!', detail:'실수를 멋지게 바로잡았어요!', executor:'시스템', score:1 });
+      return getAppData(round, role);
+    }
+
+    async function undoLastStamps(round, ids, role) {
+      await ensureAuth();
+      if (Array.isArray(ids)) {
+        for (const id of ids) {
+          const ref = db.collection('logs').doc(id);
+          const snap = await ref.get();
+          if (snap.exists) {
+            const l = snap.data();
+            const s = Number(l.score);
+            if (s > 0 && l.executor !== '시스템') {
+              await db.collection('meta').doc('state').update({ lifetimeScore: firebase.firestore.FieldValue.increment(-s) });
+            }
+            await ref.delete();
+          }
+        }
+      }
+      return getAppData(round, role);
+    }
+
+    // ===== 🔥 소원수리함 =====
+    async function addWish(round, wishText) {
+      await ensureAuth();
+      const recentSnap = await db.collection('wishes').where('round','==',round).orderBy('date','desc').limit(3).get();
+      const now = Date.now();
+      let dup = false;
+      recentSnap.forEach(d => { const w = d.data(); if (w.text === wishText && (now - new Date(w.date).getTime()) < 4000) dup = true; });
+      if (!dup) {
+        await db.collection('wishes').add({ round, text: wishText, date: new Date().toISOString(), status:'대기 중', comment:'' });
+      }
+      return getAppData(round, 'child');
+    }
+
+    async function handleWishStatus(round, wishId, action, comment, role) {
+      await ensureAuth();
+      const ref = db.collection('wishes').doc(wishId);
+      const snap = await ref.get();
+      if (snap.exists) {
+        const w = snap.data();
+        if (action === 'approve') await ref.update({ status:'소원 성취! ✨', comment: comment || '' });
+        else if (action === 'decline') await ref.update({ status:'다음에 들어줄게 🙏', comment: comment || '' });
+        else if (action === 'delete') { if (w.status === '대기 중') await ref.delete(); }
+      }
+      return getAppData(round, role);
+    }
+
+    // ===== 🔥 스페셜 미션 =====
+    async function setDailyBuff(round, buffText, role) {
+      await ensureAuth();
+      await db.collection('meta').doc('state').update({ dailyBuff: buffText || '' });
+      return getAppData(round, role);
+    }
+
+    // ===== 🔥 보관함 =====
+    async function useItemSplit(itemId, childName, useAmount, maxAmount) {
+      await ensureAuth();
+      const ref = db.collection('items').doc(itemId);
+      const snap = await ref.get();
+      if (snap.exists && snap.data().status === '사용 전') {
+        const it = snap.data();
+        let usedName = it.name;
+        if (useAmount && maxAmount && useAmount < maxAmount) {
+          usedName = it.name.replace(String(maxAmount), String(useAmount));
+          const remainAmount = maxAmount - useAmount;
+          const remainName = it.name.replace(String(maxAmount), String(remainAmount));
+          await db.collection('items').add({ round: it.round, name: remainName, obtainedDate: it.obtainedDate, status:'사용 전', usedDate:'', type: it.type });
+        }
+        await ref.update({ name: usedName, status:'사용 후', usedDate: new Date().toISOString() });
+      }
+      return getAppData(null, 'child');
+    }
+
+    async function saveRouletteResult(ticketId, wonPrize) {
+      await ensureAuth();
+      const ref = db.collection('items').doc(ticketId);
+      const snap = await ref.get();
+      let round = null;
+      if (snap.exists && snap.data().status === '사용 전') {
+        round = snap.data().round;
+        await ref.update({ status:'사용 후', usedDate: new Date().toISOString() });
+      }
+      if (round) await db.collection('items').add({ round, name: wonPrize, obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스' });
+      return getAppData(null, 'child');
+    }
+
+    // ===== 🔥 럭키박스/판 설정 =====
+    async function updateLuckyBox(round, step, text, role) {
+      await ensureAuth();
+      await db.collection('boards').doc(String(round)).update({ luckyStep: step, luckyText: text });
+      return getAppData(round, role);
+    }
+
+    async function updateBoardSettings(round, target, reward, role) {
+      await ensureAuth();
+      await db.collection('boards').doc(String(round)).update({ targetScore: Number(target), reward });
+      return getAppData(round, role);
+    }
+
+    async function createNewBoard(targetScore, reward, role) {
+      await ensureAuth();
+      const boardsSnap = await db.collection('boards').get();
+      let maxRound = 0;
+      const toClose = [];
+      boardsSnap.forEach(d => {
+        const b = d.data();
+        maxRound = Math.max(maxRound, b.round);
+        if (b.status === '진행중' || b.status === '완료') toClose.push(b.round);
+      });
+      for (const r of toClose) {
+        await grantRewardIfEligible(r); // 놓친 보상 있으면 먼저 지급
+        await db.collection('boards').doc(String(r)).update({ status: '보상 수령 완료' });
+      }
+      const newRound = maxRound + 1;
+      await db.collection('boards').doc(String(newRound)).set({ round:newRound, targetScore:Number(targetScore), reward, theme:'rivals', status:'진행중', luckyStep:'', luckyText:'' });
+      return getAppData(newRound, role);
+    }
+
+    async function updateThemeConfig(round, newTheme) {
+      await ensureAuth();
+      await db.collection('boards').doc(String(round)).update({ theme: newTheme });
+    }
+
+    async function claimReward(round, role) {
+      await ensureAuth();
+      await grantRewardIfEligible(round);
+      return getAppData(round, role);
+    }
+
+    // ===== 🔥 사유 관리 =====
+    async function addNewReasonToData(type, newReason, role, count) {
+      await ensureAuth();
+      const state = await getStateDoc();
+      if (type === 'praise') {
+        const cnt = Number(count);
+        const list = (state.praiseReasons || []).slice();
+        list.push({ name: newReason, count: (cnt && cnt > 0) ? cnt : 1 });
+        await db.collection('meta').doc('state').update({ praiseReasons: list });
+      } else {
+        const list = (state.penaltyReasons || []).slice();
+        list.push(newReason);
+        await db.collection('meta').doc('state').update({ penaltyReasons: list });
+      }
+      return getAppData(null, role);
+    }
+
+    async function updateReasonCount(reasonName, count, role) {
+      await ensureAuth();
+      const state = await getStateDoc();
+      const cnt = Number(count);
+      const list = (state.praiseReasons || []).map(r => r.name === reasonName ? { name: r.name, count: (cnt && cnt > 0) ? cnt : 1 } : r);
+      await db.collection('meta').doc('state').update({ praiseReasons: list });
+      return getAppData(null, role);
+    }
+
+    // ===== 🔥 기타 =====
+    async function sendStampRequest(reason, detail, childName) {
+      // ℹ️ 깃허브 버전은 별도 서버가 없어 이메일 발송은 지원하지 않아요.
+      // (필요하면 나중에 EmailJS 같은 외부 이메일 서비스와 연동해 추가할 수 있어요)
+      return true;
+    }
+
+    async function getReportStats(role) {
+      await ensureAuth();
+      const logsSnap = await db.collection('logs').get();
+      let stats = { totalPraise:0, totalPenalty:0, reasons:{}, days:[0,0,0,0,0,0,0] };
+      logsSnap.forEach(d => {
+        const l = d.data();
+        const score = Number(l.score);
+        const date = new Date(l.date);
+        if (score > 0 && l.executor !== '시스템') {
+          stats.totalPraise++;
+          stats.reasons[l.reason] = (stats.reasons[l.reason] || 0) + 1;
+          stats.days[date.getDay()]++;
+        } else if (score < 0) {
+          stats.totalPenalty++;
+        }
+      });
+      stats.topReasons = Object.keys(stats.reasons).map(k => ({ name:k, count:stats.reasons[k] })).sort((a,b) => b.count - a.count).slice(0,5);
+      return { stats };
+    }
+
+    // ===== 🔥 google.script.run 호환 레이어 =====
+    // 기존 코드 전체(수백 곳의 google.script.run.withSuccessHandler...) 를 하나도 안 바꾸고
+    // 그대로 재사용하기 위해, 실제로는 위의 Firestore 함수들을 호출하는 가짜 google.script.run을 만듭니다.
+    const __firestoreApi = {
+      authenticate, changeAppPassword, getAppData, addStampRecord, recoverLastPenalty,
+      addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
+      undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
+      updateReasonCount, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
+      getReportStats
+    };
+
+    function __makeRunner() {
+      const handlers = { success: null, failure: null };
+      const runner = {
+        withSuccessHandler(fn) { handlers.success = fn; return proxy; },
+        withFailureHandler(fn) { handlers.failure = fn; return proxy; }
+      };
+      const proxy = new Proxy(runner, {
+        get(target, prop) {
+          if (prop in target) return target[prop];
+          return function(...args) {
+            const fn = __firestoreApi[prop];
+            if (!fn) {
+              if (handlers.failure) handlers.failure(new Error('알 수 없는 기능입니다: ' + prop));
+              return;
+            }
+            Promise.resolve().then(() => fn(...args))
+              .then(res => { if (handlers.success) handlers.success(res); })
+              .catch(err => { if (handlers.failure) handlers.failure(err); });
+          };
+        }
+      });
+      return proxy;
+    }
+    window.google = { script: { run: undefined } };
+    Object.defineProperty(window.google.script, 'run', { get() { return __makeRunner(); } });
+    // ===================================================================== 🔥
+
+    let app = {};
+
+    let isProcessing = false;
+    let undoTimer = null;
+    let undoRows = 0;
+    
+    let currentBoxType = '보상'; 
+    let currentItemTab = 'unused'; 
+    let currentRole = '';
+    let currentMode = 'praise';
+
+    let roulettePrizes = [];
+    let currentRouletteTicketId = null;
+    const ROULETTE_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+    // 🚀 보드 캐시 (같은 세션에서 방문한 회차는 서버 재조회 없이 즉시 전환)
+    let boardCache = {}; // { round: appData }
+    let syncHideTimer = null;
+
+    // 🔒 연타(중복 클릭) 방지용 플래그 모음
+    // 버튼을 누르는 즉시 true로 잠그고, 서버 응답(성공/실패)이 오면 다시 false로 풀어줍니다.
+    let isChangingPassword = false;
+    let isUndoingStamp = false;
+    let isAddingReason = false;
+    let isCreatingBoard = false;
+    let isChangingTheme = false;
+    let isClaimingReward = false;
+    let isSavingBuff = false;
+    let isSubmittingWish = false;
+    let isChangingBoard = false;
+    let processingWishIds = new Set();
+
+    // 🖐️ 도장 찍기 전용 대기열: 서버 저장(3~4초)을 다 기다리지 않고
+    // 1초의 '연타 방지 쿨다운'만 지나면 다음 도장을 또 찍을 수 있습니다.
+    // 각 도장 요청은 큐에 쌓여 순서대로(한 번에 하나씩) 구글시트에 저장됩니다.
+    let stampQueue = [];
+    let isSendingStamp = false; // 현재 서버로 전송 중인 요청이 있는지
+    let isStampCoolingDown = false; // 버튼 연타 방지용 1초 쿨다운
+    let stampLocalIdSeq = 0;
+
+    // 🐛 버그 수정: 모바일에서 입력칸을 터치하면 가상 키보드가 올라오며 화면이 리레이아웃되고,
+    // 그 과정에서 click 이벤트의 target이 엉뚱하게 모달 배경으로 잡혀 모달이 갑자기 닫히는 문제가 있었습니다.
+    // 그래서 "터치가 실제로 시작된 지점"을 별도로 기억해뒀다가, 시작 지점과 클릭 지점이 둘 다
+    // 배경일 때만 닫히도록 바꿨습니다 (입력칸에서 시작된 터치는 절대 모달을 닫지 않음).
+    let modalPointerDownTarget = null;
+    document.addEventListener('mousedown', e => { modalPointerDownTarget = e.target; }, true);
+    document.addEventListener('touchstart', e => { modalPointerDownTarget = e.target; }, true);
+
+    function vibrate(ms = 20) { if(navigator.vibrate) navigator.vibrate(ms); }
+
+    // 🚀 상단 동기화 인디케이터 제어
+    function showSyncIndicator(text) {
+      clearTimeout(syncHideTimer);
+      const el = document.getElementById('syncIndicator');
+      el.classList.remove('error');
+      document.getElementById('syncIndicatorText').innerText = text;
+      el.classList.add('show');
+    }
+    function hideSyncIndicator(delay = 400) {
+      clearTimeout(syncHideTimer);
+      syncHideTimer = setTimeout(() => { document.getElementById('syncIndicator').classList.remove('show'); }, delay);
+    }
+    function showSyncError(text) {
+      clearTimeout(syncHideTimer);
+      const el = document.getElementById('syncIndicator');
+      el.classList.add('error');
+      document.getElementById('syncIndicatorText').innerText = text;
+      el.classList.add('show');
+      syncHideTimer = setTimeout(() => { el.classList.remove('show'); }, 2500);
+    }
+
+    // 🚀 공유 카드 생성 + 카카오톡 등으로 공유하기
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.innerText = (str === null || str === undefined) ? '' : String(str);
+      return div.innerHTML;
+    }
+
+    function buildShareCardHTML() {
+      const b = app.currentBoard;
+      const percent = Math.max(0, Math.min(100, Math.round((app.currentScore / b.targetScore) * 100)));
+      const streakHtml = app.currentStreak >= 5
+        ? `<div style="display:inline-block; margin-top:10px; background:#ffedd5; color:#ea580c; font-weight:900; font-size:13px; padding:6px 14px; border-radius:999px;">🔥 ${app.currentStreak} 콤보</div>`
+        : '';
+      const rewardItems = app.items.filter(i => i.status === '사용 전' && i.type === '보상');
+      const rewardListHtml = rewardItems.length > 0
+        ? rewardItems.map(i => `<li style="padding:6px 0; font-weight:800; color:#334155; border-bottom:1px solid #f1f5f9;">🎁 ${escapeHtml(i.name)}</li>`).join('')
+        : `<li style="padding:6px 0; color:#94a3b8; font-weight:700;">아직 보관 중인 보상이 없어요</li>`;
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 기준`;
+
+      return `
+        <div id="shareCardInner" style="width:380px; font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif; background:linear-gradient(180deg,#6366f1,#4f46e5); padding:28px 24px; box-sizing:border-box; color:#fff;">
+          <div style="font-size:22px; font-weight:900;">✨ 칭찬 스티커</div>
+          <div style="margin-top:4px; font-size:14px; font-weight:700; opacity:0.9;">${escapeHtml(app.userName)} · ${escapeHtml(app.currentTitle)}</div>
+
+          <div style="background:#fff; border-radius:20px; padding:22px; margin-top:16px; color:#1e293b;">
+            <div style="font-size:13px; font-weight:800; color:#6366f1;">${b.round}회차 · 목표: ${escapeHtml(b.reward)}</div>
+            <div style="font-size:40px; font-weight:900; color:#4f46e5; margin-top:6px;">
+              ${app.currentScore} <span style="font-size:20px; color:#cbd5e1;">/ ${b.targetScore}</span>
+            </div>
+            <div style="background:#e2e8f0; border-radius:999px; height:10px; margin-top:12px; overflow:hidden;">
+              <div style="background:#4f46e5; height:100%; width:${percent}%;"></div>
+            </div>
+            <div style="text-align:right; font-size:11px; font-weight:800; color:#94a3b8; margin-top:4px;">${percent}%</div>
+            ${streakHtml}
+            <div style="margin-top:14px; background:#eef2ff; border-radius:12px; padding:10px 14px; font-size:12px; font-weight:800; color:#4f46e5;">
+              BEST 👍 ${escapeHtml(app.bestPraise)}
+            </div>
+          </div>
+
+          <div style="background:#fff; border-radius:20px; padding:20px 22px; margin-top:14px; color:#1e293b;">
+            <div style="font-size:13px; font-weight:900; color:#334155; margin-bottom:6px;">🎒 보관함에 남은 보상</div>
+            <ul style="list-style:none; padding:0; margin:0; font-size:13px;">${rewardListHtml}</ul>
+          </div>
+
+          <div style="text-align:center; margin-top:16px; font-size:11px; font-weight:700; opacity:0.85;">${dateStr}</div>
+        </div>
+      `;
+    }
+
+    function openShareCard() {
+      vibrate();
+      const container = document.getElementById('shareCardContainer');
+      container.innerHTML = buildShareCardHTML();
+      showSyncIndicator('공유 이미지 만드는 중...');
+
+      // 폰트/레이아웃이 자리잡을 시간을 살짝 준 뒤 캡처
+      setTimeout(() => {
+        html2canvas(document.getElementById('shareCardInner'), { backgroundColor: '#ffffff', scale: 2, useCORS: true })
+          .then(canvas => {
+            canvas.toBlob(blob => {
+              hideSyncIndicator();
+              if (!blob) { showSyncError('이미지 생성에 실패했어요.'); return; }
+              shareOrDownloadImage(blob);
+            }, 'image/png');
+          })
+          .catch(err => {
+            showSyncError('캡처 실패: ' + err.message);
+          });
+      }, 80);
+    }
+
+    function shareOrDownloadImage(blob) {
+      const fileName = `칭찬스티커_${app.currentBoard.round}회차.png`;
+      let file = null;
+      try { file = new File([blob], fileName, { type: 'image/png' }); } catch(e) { /* 구형 브라우저 대비 */ }
+
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: '칭찬 스티커 현황',
+          text: `${app.userName}의 칭찬 스티커 현황이에요! 🎉`
+        }).catch(err => {
+          if (err && err.name !== 'AbortError') showToast('공유가 취소되었어요.');
+        });
+      } else {
+        // Web Share API를 못 쓰는 환경(구형 브라우저 등)에서는 이미지를 다운로드해서 수동 첨부하도록 안내
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fileName;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+        showToast('이미지가 저장되었어요! 카톡에서 사진 첨부로 보내주세요 📷');
+      }
+    }
+
+
+    // 🩺 진단용 임시 코드: 페이지가 열리자마자 아무 데이터도 안 건드리는 가장 가벼운
+    // 함수(pingServer)를 호출해서, 서버 응답 자체가 오는지부터 화면 상단에 계속 보여줍니다.
+    window.onload = () => {
+      const savedRole = localStorage.getItem('stickerRole');
+      const savedPw = localStorage.getItem('stickerPw');
+      
+      if (savedRole === 'child') attemptLogin('child');
+      else if (savedRole === 'parent' && savedPw) {
+        document.getElementById('loginPw').value = savedPw;
+        attemptLogin('parent');
+      }
+    };
+
+    // 🩺 진단용 임시 함수: 시트 데이터를 전혀 건드리지 않는 가장 가벼운 함수로
+    // 서버 왕복 자체가 되는지부터 확인합니다.
+
+    let loginRetryCount = 0;
+
+    function attemptLogin(role, isRetry) {
+      const pw = document.getElementById('loginPw').value;
+      const errorEl = document.getElementById('loginError');
+      const pBtn = document.getElementById('btnParentLogin');
+      const cBtn = document.getElementById('btnChildLogin');
+      
+      if (role === 'parent' && !pw) {
+        errorEl.innerText = "엄빠용 비밀번호를 입력해주세요.";
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      
+      errorEl.classList.add('hidden');
+      if (!isRetry) {
+        if (role === 'parent') { pBtn.disabled = true; pBtn.innerText = "확인 중..."; } 
+        else { cBtn.disabled = true; cBtn.innerText = "접속 중..."; }
+      }
+
+      google.script.run
+        .withSuccessHandler(res => {
+           // 🌐 서버는 응답했지만 내용이 비어있거나(res=null) 에러 형태인 경우 =
+           // 대부분 모바일 네트워크가 불안정해서 응답이 온전히 전달되지 못한 경우입니다.
+           // 화면을 깨뜨리지 않고, 로그인 화면에서 자동으로 재시도합니다.
+           if (!res || res.__error) {
+             handleLoginRetry(role, res);
+             return;
+           }
+           loginRetryCount = 0;
+           try {
+             localStorage.setItem('stickerRole', role);
+             if (role === 'parent') localStorage.setItem('stickerPw', pw); 
+           } catch (e) { /* localStorage를 못 쓰는 환경이어도 로그인 자체는 계속 진행 */ }
+
+           currentRole = role;
+           document.getElementById('loginScreen').classList.add('hidden');
+           document.getElementById('mainApp').classList.remove('hidden');
+           initApp(res);
+           
+           pBtn.disabled = false; cBtn.disabled = false;
+           pBtn.innerText = "엄빠 접속"; cBtn.innerText = "강천 접속";
+        })
+        .withFailureHandler(err => {
+           handleLoginRetry(role, null, err);
+        })
+        .authenticate(pw, role);
+    }
+
+    // 📶 네트워크가 불안정해서 응답을 못 받았을 때: 화면은 로그인 화면에 그대로 두고
+    // 최대 2번까지 자동으로 다시 시도합니다. 그래도 안 되면 사용자에게 안내합니다.
+    function handleLoginRetry(role, res, err) {
+      const pBtn = document.getElementById('btnParentLogin');
+      const cBtn = document.getElementById('btnChildLogin');
+      const btn = role === 'parent' ? pBtn : cBtn;
+
+      if (loginRetryCount < 2) {
+        loginRetryCount++;
+        btn.innerText = `재연결 중... (${loginRetryCount}/2)`;
+        setTimeout(() => { attemptLogin(role, true); }, 1500);
+        return;
+      }
+
+      loginRetryCount = 0;
+      const message = err ? err.message : (res && res.__message ? res.__message : '서버 응답을 받지 못했어요.');
+      const errorEl = document.getElementById('loginError');
+      errorEl.innerText = '연결이 불안정해요 (' + message + '). 네트워크 상태를 확인하고 버튼을 다시 눌러주세요.';
+      errorEl.classList.remove('hidden');
+      pBtn.disabled = false; cBtn.disabled = false;
+      pBtn.innerText = "엄빠 접속"; cBtn.innerText = "강천 접속";
+    }
+
+    function changePassword() {
+      if (isChangingPassword) return; // 🔒 연타 방지
+      vibrate();
+      const oldPw = document.getElementById('oldPwInput').value;
+      const newPw = document.getElementById('newPwInput').value;
+      const newPwConfirm = document.getElementById('newPwConfirmInput').value;
+
+      if (!oldPw || !newPw || !newPwConfirm) { showToast("비밀번호를 모두 입력해주세요."); return; }
+      if (newPw !== newPwConfirm) { showToast("새 비밀번호 확인이 일치하지 않습니다."); return; }
+
+      isChangingPassword = true;
+      const btn = document.getElementById('btnChangePassword');
+      btn.disabled = true; btn.innerText = "변경 중...";
+
+      google.script.run
+        .withSuccessHandler(() => {
+          showToast("비밀번호가 성공적으로 변경되었습니다! 🔐");
+          localStorage.setItem('stickerPw', newPw);
+          document.getElementById('oldPwInput').value = '';
+          document.getElementById('newPwInput').value = '';
+          document.getElementById('newPwConfirmInput').value = '';
+          isChangingPassword = false; btn.disabled = false; btn.innerText = "비밀번호 변경하기";
+        })
+        .withFailureHandler(err => {
+          showToast("오류: " + err.message);
+          isChangingPassword = false; btn.disabled = false; btn.innerText = "비밀번호 변경하기";
+        })
+        .changeAppPassword(oldPw, newPw);
+    }
+
+    function logout() { vibrate(); localStorage.removeItem('stickerRole'); localStorage.removeItem('stickerPw'); location.reload(); }
+
+    function initApp(data) {
+      if (!data) {
+        showLoadErrorScreen('서버로부터 응답을 받지 못했어요. 네트워크 상태를 확인하고 다시 시도해주세요.');
+        return;
+      }
+      if (data.__error) {
+        showLoadErrorScreen(data.__message || '알 수 없는 오류가 발생했어요.');
+        return;
+      }
+      try {
+        app = data;
+        boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
+        document.getElementById('userTitle').innerText = app.currentTitle;
+        document.getElementById('lifetimeScore').innerText = `${app.lifetimeScore} pts`;
+        document.getElementById('levelBar').style.width = `${(app.lifetimeScore % 50) * 2}%`;
+        renderBoard();
+      } catch (e) {
+        showLoadErrorScreen('화면을 그리는 중 오류가 발생했어요: ' + e.message);
+      }
+    }
+
+    // 데이터를 불러오지 못했을 때 깔끔한 안내 + 재시도 버튼을 보여줍니다.
+    function showLoadErrorScreen(message) {
+      const v = document.getElementById('visualizer');
+      if (v) {
+        v.innerHTML = `
+          <div class="text-center p-6">
+            <p class="text-4xl mb-3">😥</p>
+            <p class="font-black text-slate-600 mb-1">불러오는 중 문제가 생겼어요</p>
+            <p class="text-xs text-slate-400 font-bold mb-4">${message}</p>
+            <button onclick="location.reload()" class="px-5 py-2.5 bg-indigo-500 text-white font-black rounded-xl text-sm active:scale-95 transition">다시 시도하기</button>
+          </div>
+        `;
+      } else {
+        alert('불러오기 실패: ' + message + '\n\n새로고침 후 다시 시도해주세요.');
+      }
+    }
+
+    function renderBoard() {
+      const b = app.currentBoard;
+      document.getElementById('currentScore').innerText = app.currentScore;
+      document.getElementById('targetScore').innerText = b.targetScore;
+      document.getElementById('rewardText').innerText = b.reward;
+      document.getElementById('bestPraise').innerText = app.bestPraise;
+      document.getElementById('boardTitle').innerText = `${b.round}회차 [${b.status}]`;
+      document.getElementById('themeSelect').value = b.theme;
+
+      const isOngoing = b.status === '진행중';
+      const isParent = app.isParent;
+      
+      document.getElementById('parentAdmin').className = isParent ? 'grid grid-cols-4 gap-1 mt-4' : 'hidden';
+      document.getElementById('parentControls').className = (isParent && isOngoing) ? 'block space-y-4' : 'hidden';
+      document.getElementById('childControls').className = (!isParent && isOngoing) ? 'block' : 'hidden';
+      
+      const streak = document.getElementById('streakBadge');
+      if(app.currentStreak >= 5 && isOngoing) {
+        streak.classList.remove('hidden');
+        document.getElementById('streakCount').innerText = app.currentStreak;
+      } else { streak.classList.add('hidden'); }
+
+      // 오늘의 스페셜 미션 배너 활성화 감지 로직
+      const banner = document.getElementById('specialPraiseBanner');
+      if(app.dailyBuff) {
+        banner.classList.remove('hidden');
+        document.getElementById('specialPraiseText').innerText = app.dailyBuff;
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      renderTheme();
+      renderLogs();
+    }
+
+    function openReportModal() {
+      vibrate();
+      const content = document.getElementById('reportContent');
+      content.innerHTML = `<p class="text-center text-slate-400 py-10 font-bold">통계를 불러오는 중...</p>`;
+      openModal('reportModal');
+
+      // 🚀 통계(요일별/사유별)는 자주 안 쓰이니, 리포트를 열 때만 서버에 요청합니다.
+      google.script.run
+        .withSuccessHandler(res => {
+          if (!res || res.__error) {
+            content.innerHTML = `<p class="text-center text-slate-400 py-10 font-bold">통계를 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>`;
+            return;
+          }
+          renderReportContent(res.stats);
+        })
+        .withFailureHandler(err => {
+          content.innerHTML = `<p class="text-center text-slate-400 py-10 font-bold">통계를 불러오지 못했어요: ${err.message}</p>`;
+        })
+        .getReportStats(currentRole);
+    }
+
+    function renderReportContent(stats) {
+      const content = document.getElementById('reportContent');
+
+      if (!stats || stats.totalPraise === 0) {
+        content.innerHTML = `<p class="text-center text-slate-400 py-10 font-bold">아직 칭찬 데이터가 부족해요. 도장을 더 찍어주세요!</p>`;
+        return;
+      }
+
+      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+      const maxDay = Math.max(...stats.days) || 1; 
+      const dayBars = stats.days.map((count, i) => {
+        const h = (count / maxDay) * 100;
+        return `
+          <div class="flex flex-col items-center gap-1 flex-1">
+            <div class="w-full bg-blue-100 rounded-t-md flex items-end h-24 overflow-hidden relative">
+              <div class="w-full bg-blue-500 rounded-t-md transition-all duration-1000" style="height: ${h}%"></div>
+            </div>
+            <span class="text-[10px] font-bold text-slate-500">${dayNames[i]}</span>
+            <span class="text-[10px] font-black text-slate-700">${count}</span>
+          </div>
+        `;
+      }).join('');
+
+      const maxReason = stats.topReasons.length > 0 ? stats.topReasons[0].count : 1;
+      const reasonBars = stats.topReasons.map((r, i) => {
+        const w = (r.count / maxReason) * 100;
+        const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+        return `
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs font-bold text-slate-600">
+              <span>${medals[i]} ${r.name}</span>
+              <span>${r.count}회</span>
+            </div>
+            <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+              <div class="bg-emerald-400 h-full rounded-full" style="width: ${w}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      content.innerHTML = `
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center">
+            <p class="text-xs font-bold text-slate-400 mb-1">총 받은 칭찬</p>
+            <p class="text-2xl font-black text-blue-500">${stats.totalPraise}회</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center">
+            <p class="text-xs font-bold text-slate-400 mb-1">총 차감</p>
+            <p class="text-2xl font-black text-red-500">${stats.totalPenalty}회</p>
+          </div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+          <h4 class="font-black text-sm text-slate-700 mb-4">📅 무슨 요일에 가장 잘할까요?</h4>
+          <div class="flex gap-2 items-end h-32">
+            ${dayBars}
+          </div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+          <h4 class="font-black text-sm text-slate-700 mb-4">🏆 우리 아이 BEST 칭찬 TOP 5</h4>
+          <div class="space-y-4">
+            ${reasonBars}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTheme() {
+      const v = document.getElementById('visualizer');
+      const cur = app.currentScore;
+      const target = app.currentBoard.targetScore;
+      const theme = app.currentBoard.theme;
+      const lucky = app.currentBoard.luckyStep;
+      
+      v.classList.remove('shake');
+      v.innerHTML = '';
+      
+      const getLuckyClick = (isLucky) => { return (isLucky && app.isParent) ? 'onclick="openEditLuckyBox(event)"' : ''; };
+      const getLuckyClass = (isLucky) => { return isLucky ? 'lucky cursor-pointer z-30' : ''; };
+
+      if (theme === 'rivals') {
+        const cols = target > 30 ? 6 : 5;
+        v.innerHTML = `<div class="step-grid" style="grid-template-columns: repeat(${cols}, 1fr)"></div>`;
+        const grid = v.querySelector('.step-grid');
+        for(let i=1; i<=target; i++) {
+          const isLucky = (i == lucky);
+          const active = i <= cur ? 'active' : '';
+          grid.innerHTML += `<div class="rivals-cell ${active} ${getLuckyClass(isLucky)}" ${getLuckyClick(isLucky)}>${isLucky && i > cur ? '🎁' : i}</div>`;
+        }
+      } 
+      else if (theme === 'thermometer') {
+        v.innerHTML = renderThermometerTheme(cur, target, lucky);
+      }
+      else if (theme === 'flower') {
+        v.innerHTML = renderFlowerTheme(cur, target, lucky);
+      }
+      else if (theme === 'rocket') {
+        v.innerHTML = renderRocketTheme(cur, target, lucky);
+      }
+      else if (theme === 'lego') {
+        v.innerHTML = renderLegoTheme(cur, target, lucky);
+      }
+      else if (theme === 'tree') {
+        v.innerHTML = renderTreeTheme(cur, target, lucky);
+      }
+      else if (theme === 'balloon') {
+        v.innerHTML = renderBalloonTheme(cur, target, lucky);
+      }
+      else if (theme === 'fishtank') {
+        v.innerHTML = renderFishtankTheme(cur, target, lucky);
+      }
+      else if (theme === 'cake') {
+        v.innerHTML = renderCakeTheme(cur, target, lucky);
+      }
+      else if (theme === 'boardgame') {
+        v.innerHTML = renderBoardGameTheme(cur, target, lucky);
+      }
+      else if (theme === 'constellation') {
+        v.innerHTML = renderConstellationTheme(cur, target, lucky);
+      }
+      else if (theme === 'footprint') {
+        v.innerHTML = renderFootprintTheme(cur, target, lucky);
+      }
+      else if (theme === 'puzzle') {
+        const imgUrl = app.currentBoard.puzzleImg || 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&w=500&q=60';
+        let pieces = ''; 
+        for(let i=1; i<=target; i++) { 
+          const isLucky = (i == lucky);
+          const active = i <= cur ? 'active' : '';
+          pieces += `<div class="puzzle-piece ${active} ${getLuckyClass(isLucky)}" ${getLuckyClick(isLucky)}>${isLucky && i > cur ? '🎁' : ''}</div>`; 
+        }
+        v.innerHTML = `<img src="${imgUrl}" class="absolute inset-0 w-full h-full object-cover rounded-xl"><div class="puzzle-grid">${pieces}</div>`;
+      }
+
+      // 🎁 목표 달성/보상 지급은 이제 서버에서 자동으로 처리되므로, "보상 받기" 버튼 없이
+      // 완료 상태(보상 수령 완료)일 때 안내 문구만 보여줍니다.
+      if (app.currentBoard.status === '보상 수령 완료') {
+        v.innerHTML += `<div class="claim-overlay">
+          <h3 class="text-2xl font-black text-indigo-600 mb-2">GOAL!! 🏆</h3>
+          <p class="font-bold text-slate-500 text-sm">보상이 보관함에 자동으로 담겼어요! 🎁</p>
+        </div>`;
+      }
+    }
+
+    // 🌡️ 온도계 테마: 목표 개수만큼 눈금을 그리고, 실제 온도계처럼 수은주가 연속적으로 차오릅니다.
+    function renderThermometerTheme(cur, target, lucky) {
+      const percent = Math.max(0, Math.min(100, (cur / target) * 100));
+      let ticksHtml = '';
+      const majorEvery = Math.max(1, Math.ceil(target / 10)); // 눈금이 너무 빽빽하지 않도록 10개 안팎으로 조절
+      for (let i = 1; i < target; i++) {
+        const p = (i / target) * 100;
+        const isMajor = (i % majorEvery === 0);
+        ticksHtml += `<div class="thermo-tick ${isMajor ? 'major' : ''}" style="bottom:${p}%"></div>`;
+      }
+      let luckyHtml = '';
+      if (lucky) {
+        const lp = Math.max(0, Math.min(100, (lucky / target) * 100));
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        luckyHtml = `<div class="thermo-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= lucky ? '🚩' : '🎁'}</div>`;
+      }
+      return `
+        <div class="thermo-wrap">
+          <div class="thermo-label">${cur} / ${target}</div>
+          <div class="thermo-tube-outer">
+            ${ticksHtml}
+            <div class="thermo-mercury" style="height:${percent}%"></div>
+            ${luckyHtml}
+          </div>
+          <div class="thermo-bulb">${Math.round(percent)}%</div>
+        </div>
+      `;
+    }
+
+    // 🌸 칭찬의 꽃 테마: 하늘과 잔디가 있는 정원에 도장을 찍을 때마다 꽃이 팡! 하고 피어납니다.
+    function renderFlowerTheme(cur, target, lucky) {
+      const species = ['🌸', '🌼', '🌻', '🌺'];
+      let html = '<div class="garden-cloud" style="top:8%; left:12%;">☁️</div><div class="garden-cloud" style="top:16%; right:14%;">☁️</div>';
+      for (let i = 1; i <= target; i++) {
+        const isLucky = (i == lucky);
+        const bloomed = i <= cur;
+        const isNewest = (i === cur);
+        let icon = bloomed ? species[i % species.length] : '🌱';
+        if (isLucky && i > cur) icon = '🎁';
+        const cls = `garden-flower ${bloomed ? '' : 'seed'} ${isNewest ? 'bloom-in' : ''}`;
+        const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        html += `<span class="${cls}" ${clickAttr}>${icon}</span>`;
+      }
+      return `<div class="garden-bed"><div class="garden-flowers">${html}</div></div>`;
+    }
+
+    // 🚀 꿈의 로켓 테마: 밤하늘을 배경으로 로켓이 목표(달)를 향해 점점 높이 날아갑니다.
+    function renderRocketTheme(cur, target, lucky) {
+      const curPercent = Math.max(0, Math.min(100, (cur / target) * 100));
+      let starsHtml = '';
+      const offsets = [-38, 0, 38, -22, 22, -48, 48, -10, 10];
+      for (let i = 1; i <= Math.min(cur, target - 1); i++) {
+        const p = (i / target) * 100;
+        const left = 50 + offsets[i % offsets.length];
+        starsHtml += `<div class="rocket-star" style="bottom:${p}%; left:${left}%;">✨</div>`;
+      }
+      let luckyHtml = '';
+      if (lucky) {
+        const lp = Math.max(0, Math.min(100, (lucky / target) * 100));
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        luckyHtml = `<div class="rocket-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= lucky ? '🪐' : '🎁'}</div>`;
+      }
+      return `
+        <div class="rocket-sky">
+          <div class="rocket-trail" style="height:${curPercent}%;"></div>
+          ${starsHtml}
+          <div class="rocket-goal">🌕</div>
+          ${luckyHtml}
+          <div class="rocket-current" style="bottom:${curPercent}%;">🚀</div>
+        </div>
+      `;
+    }
+
+    // 🧱 레고 성 테마: 벽돌이 한 줄씩 어긋나게 쌓이며 진짜 성벽처럼 올라갑니다.
+    function renderLegoTheme(cur, target, lucky) {
+      const cols = target > 30 ? 6 : 5;
+      const colors = ['#3b82f6', '#ef4444', '#facc15', '#22c55e', '#a855f7'];
+      const rows = Math.ceil(target / cols);
+      let idx = 1;
+      let rowsHtml = '';
+      for (let r = 0; r < rows; r++) {
+        let rowCells = '';
+        for (let c = 0; c < cols && idx <= target; c++, idx++) {
+          const i = idx;
+          const isLucky = (i == lucky);
+          const filled = i <= cur;
+          const style = filled ? `background:${colors[i % colors.length]};` : '';
+          const cls = `lego-brick2 ${filled ? '' : 'empty'} ${isLucky ? 'lucky' : ''}`;
+          const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event)" style="cursor:pointer; ${style}"` : (style ? `style="${style}"` : '');
+          const icon = (isLucky && i > cur) ? '🎁' : '';
+          rowCells += `<div class="${cls}" ${clickAttr}>${icon}</div>`;
+        }
+        rowsHtml += `<div class="lego-row ${r % 2 === 1 ? 'offset' : ''}">${rowCells}</div>`;
+      }
+      return `<div class="lego-wall">${rowsHtml}</div>`;
+    }
+
+    // 🌳 무럭무럭 나무 테마: 도장 개수만큼 줄기와 나뭇잎이 자라고, 열매가 하나씩 열립니다.
+    const TREE_FRUIT_SPOTS = [[30,32],[68,28],[46,52],[20,58],[78,50],[52,20],[34,72],[64,70],[42,38],[58,40]];
+    function renderTreeTheme(cur, target, lucky) {
+      const percent = Math.max(0, Math.min(100, (cur / target) * 100));
+      const trunkHeight = 24 + percent * 1.4; // px
+      const canopySize = 90 + percent * 1.5; // px
+      const canopyBottom = 16 + trunkHeight - canopySize * 0.32;
+
+      let fruitsHtml = '';
+      for (let i = 1; i <= Math.min(cur, target); i++) {
+        const spot = TREE_FRUIT_SPOTS[(i - 1) % TREE_FRUIT_SPOTS.length];
+        fruitsHtml += `<div class="tree-fruit" style="left:${spot[0]}%; top:${spot[1]}%;">🍎</div>`;
+      }
+      if (lucky) {
+        const spot = TREE_FRUIT_SPOTS[(lucky - 1) % TREE_FRUIT_SPOTS.length];
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        fruitsHtml += `<div class="tree-fruit lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= lucky ? '🍏' : '🎁'}</div>`;
+      }
+
+      return `
+        <div class="tree-scene">
+          <div class="tree-ground"></div>
+          <div class="tree-trunk" style="height:${trunkHeight}px;"></div>
+          <div class="tree-canopy" style="width:${canopySize}px; height:${canopySize}px; bottom:${canopyBottom}px;">
+            ${fruitsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    // 🎈 열기구 여행 테마: 낮 하늘 위로 열기구가 점점 높이 떠오르고, 지나온 자리엔 구름이 남습니다.
+    function renderBalloonTheme(cur, target, lucky) {
+      const curPercent = Math.max(0, Math.min(100, (cur / target) * 100));
+      let cloudsHtml = '';
+      const offsets = [-38, 0, 38, -22, 22, -48, 48, -10, 10];
+      for (let i = 1; i <= Math.min(cur, target - 1); i++) {
+        const p = (i / target) * 100;
+        const left = 50 + offsets[i % offsets.length];
+        cloudsHtml += `<div class="balloon-cloud-mark" style="bottom:${p}%; left:${left}%;">☁️</div>`;
+      }
+      let luckyHtml = '';
+      if (lucky) {
+        const lp = Math.max(0, Math.min(100, (lucky / target) * 100));
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        luckyHtml = `<div class="balloon-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= lucky ? '🎉' : '🎁'}</div>`;
+      }
+      return `
+        <div class="balloon-sky">
+          ${cloudsHtml}
+          <div class="balloon-goal">🌈</div>
+          ${luckyHtml}
+          <div class="balloon-current" style="bottom:${curPercent}%;">🎈</div>
+        </div>
+      `;
+    }
+
+    // 🐠 우리 집 어항 테마: 도장을 찍을 때마다 물고기가 한 마리씩 헤엄쳐 들어옵니다.
+    const FISHTANK_SPOTS = [[20,25],[70,20],[35,45],[80,50],[15,60],[55,30],[45,65],[85,72],[25,75],[65,55],[10,40],[60,15]];
+    const FISH_SPECIES = ['🐠','🐟','🐡'];
+    function renderFishtankTheme(cur, target, lucky) {
+      let fishHtml = '';
+      for (let i = 1; i <= Math.min(cur, target); i++) {
+        const spot = FISHTANK_SPOTS[(i - 1) % FISHTANK_SPOTS.length];
+        const flip = (i % 2 === 0) ? 'scaleX(-1)' : 'scaleX(1)';
+        const species = FISH_SPECIES[i % FISH_SPECIES.length];
+        fishHtml += `<div class="fishtank-fish" style="left:${spot[0]}%; top:${spot[1]}%; transform: translate(-50%, -50%) ${flip};">${species}</div>`;
+      }
+      if (lucky) {
+        const spot = FISHTANK_SPOTS[(lucky - 1) % FISHTANK_SPOTS.length];
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        fishHtml += `<div class="fishtank-fish lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= lucky ? '🐬' : '🎁'}</div>`;
+      }
+      return `
+        <div class="fishtank-scene">
+          <div class="fishtank-bubble" style="left:15%; top:80%;">🫧</div>
+          <div class="fishtank-bubble" style="left:82%; top:85%;">🫧</div>
+          <div class="fishtank-bubble" style="left:50%; top:88%;">🫧</div>
+          ${fishHtml}
+          <div class="fishtank-plant" style="left:8%;">🌿</div>
+          <div class="fishtank-plant" style="left:88%;">🌿</div>
+          <div class="fishtank-sand"></div>
+        </div>
+      `;
+    }
+
+    // 🎂 케이크 조각 모으기 테마: 도장을 찍을 때마다 케이크가 한 조각씩 채워집니다.
+    function renderCakeTheme(cur, target, lucky) {
+      const sliceDeg = 360 / target;
+      let stops = [];
+      for (let i = 0; i < target; i++) {
+        const filled = (i + 1) <= cur;
+        const isLucky = (i + 1) === lucky;
+        let color = filled ? (i % 2 === 0 ? '#fb7185' : '#f9a8d4') : '#e5e7eb';
+        if (isLucky && !filled) color = '#fde68a';
+        const start = (i * sliceDeg).toFixed(2);
+        const end = ((i + 1) * sliceDeg).toFixed(2);
+        stops.push(`${color} ${start}deg ${end}deg`);
+      }
+      const conic = `conic-gradient(${stops.join(', ')})`;
+
+      let luckyMarkHtml = '';
+      if (lucky) {
+        const midDeg = (lucky - 0.5) * sliceDeg - 90; // 12시 방향을 0도로 맞춤
+        const rad = midDeg * Math.PI / 180;
+        const x = 50 + Math.cos(rad) * 34;
+        const y = 50 + Math.sin(rad) * 34;
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        luckyMarkHtml = `<div class="cake-lucky-mark" style="left:${x}%; top:${y}%;" ${clickAttr}>${cur >= lucky ? '⭐' : '🎁'}</div>`;
+      }
+
+      const isDone = cur >= target;
+      return `
+        <div class="cake-wrap">
+          <div class="cake-plate" style="background:${conic};">
+            ${luckyMarkHtml}
+            <div class="cake-center">${isDone ? '🎂' : '🕯️'}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 🎲 보드게임 말판 테마: 뱀처럼 구불구불한 길을 따라 말이 한 칸씩 전진합니다.
+    function renderBoardGameTheme(cur, target, lucky) {
+      const cols = target > 30 ? 6 : 5;
+      const rows = Math.ceil(target / cols);
+      let cellsHtml = '';
+      for (let r = 0; r < rows; r++) {
+        let rowIndices = [];
+        for (let c = 0; c < cols; c++) {
+          const linear = r * cols + c + 1;
+          if (linear <= target) rowIndices.push(linear);
+        }
+        if (r % 2 === 1) rowIndices.reverse(); // 짝수 줄은 방향을 반대로 → 뱀처럼 구불구불한 경로
+        rowIndices.forEach(i => {
+          const isLucky = (i == lucky);
+          const filled = i <= cur;
+          const isToken = (i === cur && cur > 0);
+          const cls = `board-cell ${filled ? 'filled' : ''} ${isToken ? 'token' : ''} ${isLucky ? 'lucky' : ''}`;
+          const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+          const icon = isToken ? '🐹' : (isLucky && i > cur) ? '🎁' : (filled ? '✔️' : i);
+          cellsHtml += `<div class="${cls}" ${clickAttr}>${icon}</div>`;
+        });
+      }
+      return `<div class="board-path" style="grid-template-columns: repeat(${cols}, 1fr);">${cellsHtml}</div>`;
+    }
+
+    // 🌌 별자리 만들기 테마: 도장 찍을 때마다 별이 켜지고, 별과 별 사이가 선으로 이어져 별자리가 완성됩니다.
+    const CONSTELLATION_SPOTS = [[15,72],[26,42],[40,58],[52,26],[64,46],[76,20],[86,48],[70,74],[54,80],[38,86],[26,92],[18,60]];
+    function renderConstellationTheme(cur, target, lucky) {
+      let starsHtml = '', dotsHtml = '';
+      const pointsAchieved = [];
+      for (let i = 1; i <= target; i++) {
+        const spot = CONSTELLATION_SPOTS[(i - 1) % CONSTELLATION_SPOTS.length];
+        if (i <= cur) {
+          pointsAchieved.push(spot);
+          starsHtml += `<div class="constellation-star" style="left:${spot[0]}%; top:${spot[1]}%;">⭐</div>`;
+        } else {
+          dotsHtml += `<div class="constellation-placeholder" style="left:${spot[0]}%; top:${spot[1]}%;"></div>`;
+        }
+      }
+      let lineHtml = '';
+      if (pointsAchieved.length > 1) {
+        const pts = pointsAchieved.map(p => `${p[0]},${p[1]}`).join(' ');
+        lineHtml = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"><polyline points="${pts}" fill="none" stroke="rgba(253,224,71,0.55)" stroke-width="0.6" /></svg>`;
+      }
+      let luckyHtml = '';
+      if (lucky) {
+        const spot = CONSTELLATION_SPOTS[(lucky - 1) % CONSTELLATION_SPOTS.length];
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        luckyHtml = `<div class="constellation-star lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= lucky ? '🌟' : '🎁'}</div>`;
+      }
+      return `<div class="constellation-sky">${lineHtml}${dotsHtml}${starsHtml}${luckyHtml}</div>`;
+    }
+
+    // 🐾 발자국 산책로 테마: 발자국을 따라 목적지(집)까지 걸어갑니다.
+    function renderFootprintTheme(cur, target, lucky) {
+      let html = `<div class="footprint-dest">🏡</div>`;
+      for (let i = 1; i <= target; i++) {
+        const y = 88 - (i / target) * 76;
+        const x = 50 + Math.sin(i * 0.9) * 26;
+        const filled = i <= cur;
+        const isLucky = (i == lucky);
+        if (isLucky) {
+          const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+          html += `<div class="footprint-lucky" style="left:${x}%; top:${y}%;" ${clickAttr}>${cur >= lucky ? '🐾' : '🎁'}</div>`;
+        } else {
+          html += `<div class="footprint-mark ${filled ? '' : 'empty'}" style="left:${x}%; top:${y}%;">🐾</div>`;
+        }
+      }
+      return `<div class="footprint-path">${html}</div>`;
+    }
+
+    function changeTheme() {
+      if (isChangingTheme) return; // 🔒 연타 방지
+      vibrate();
+      const sel = document.getElementById('themeSelect').value;
+      app.currentBoard.theme = sel;
+      renderTheme();
+      isChangingTheme = true;
+      const selectEl = document.getElementById('themeSelect');
+      selectEl.disabled = true;
+      google.script.run
+        .withSuccessHandler(() => { isChangingTheme = false; selectEl.disabled = false; })
+        .withFailureHandler(err => { showToast("통신 오류: " + err.message); isChangingTheme = false; selectEl.disabled = false; })
+        .updateThemeConfig(app.currentBoard.round, sel);
+      showToast("테마가 변경되었습니다.");
+    }
+
+    // 📌 2번 만회 제어 구문 확장을 위해 분기 처리 개선
+    function setMode(mode) {
+      if(isProcessing) return;
+      vibrate(30);
+      document.getElementById('reasonArea').classList.remove('hidden');
+      const submit = document.getElementById('btnText');
+      const btn = document.getElementById('submitBtn');
+      const select = document.getElementById('reasonSelect');
+      
+      if(mode === 'praise') {
+        btn.className = 'w-full py-5 bg-blue-500 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2';
+        submit.innerText = '도장 쾅! 찍어주기';
+        document.getElementById('btnNewReason').className = "bg-slate-200 px-4 rounded-2xl text-xs font-black text-slate-500 whitespace-nowrap active:scale-95 transition";
+        select.innerHTML = app.praiseList.map(r => `<option value="${r}">${r}</option>`).join('');
+      } else if(mode === 'penalty') {
+        btn.className = 'w-full py-5 bg-red-500 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2';
+        submit.innerText = '사유 기록하기 (-1)';
+        document.getElementById('btnNewReason').className = "bg-slate-200 px-4 rounded-2xl text-xs font-black text-slate-500 whitespace-nowrap active:scale-95 transition";
+        select.innerHTML = app.penaltyList.map(r => `<option value="${r}">${r}</option>`).join('');
+      } else if(mode === 'recover') {
+        btn.className = 'w-full py-5 bg-amber-500 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2';
+        submit.innerText = '마지막 차감 취소 및 도장 콤보 복구하기 (↩️)';
+        document.getElementById('btnNewReason').className = "hidden"; // 고정 옵션이므로 숨김
+        select.innerHTML = `<option value="✨ 만회하기 성공!">실수를 멋지게 복구했습니다!</option>`;
+      }
+      currentMode = mode;
+    }
+
+    // 🚀🚀🚀 핵심 개선: 낙관적 업데이트(Optimistic UI) + 대기열 처리
+    // 버튼을 누르는 즉시 화면에 스티커판을 먼저 반영합니다.
+    // '연타 방지'는 1초짜리 쿨다운으로만 걸어두고, 실제 구글시트 저장(3~4초)은
+    // 대기열(stampQueue)에 쌓아 백그라운드에서 순서대로 처리하므로
+    // 저장이 끝나기 전에도 1초 뒤엔 바로 다음 도장을 찍을 수 있습니다.
+    function executeStamp() {
+      if(currentMode === 'penalty' && app.currentScore <= 0) { showToast("이미 0개예요! 더 뺄 수 없어요 🙅"); return; }
+
+      // 📌 만회하기는 로직이 특수(과거 로그 수정)하므로 큐잉하지 않고 기존 방식(완전 대기) 유지
+      if(currentMode === 'recover') {
+        if(isProcessing) return;
+        isProcessing = true;
+        vibrate(40);
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        showSyncIndicator('만회 처리 중...');
+        google.script.run
+          .withSuccessHandler(res => {
+            app = res;
+            boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
+            renderBoard();
+            showToast("차감 조치 복구 완료! 스트릭이 다시 가동됩니다. ↩️");
+            hideSyncIndicator();
+            isProcessing = false; btn.disabled = false;
+          })
+          .withFailureHandler(err => {
+            showSyncError("복구 실패: " + err.message);
+            isProcessing = false; btn.disabled = false;
+          })
+          .recoverLastPenalty(app.currentBoard.round, currentRole);
+        return;
+      }
+
+      // 🖐️ 연타 방지: 1초 안에 또 누르면 무시 (실제 저장 완료를 기다리는 게 아니라 순수 클릭 방지용)
+      if (isStampCoolingDown) return;
+      isStampCoolingDown = true;
+      const submitButtonEl = document.getElementById('submitBtn');
+      submitButtonEl.disabled = true;
+      setTimeout(() => { isStampCoolingDown = false; submitButtonEl.disabled = false; }, 1000);
+
+      vibrate(40);
+      const reason = document.getElementById('reasonSelect').value;
+      const detail = document.getElementById('detailInput').value;
+      // 🔢 사유별 기본 스티커 개수(없으면 1개)를 사용합니다.
+      const baseCount = (app.praiseCounts && app.praiseCounts[reason]) ? app.praiseCounts[reason] : 1;
+      let score = currentMode === 'praise' ? baseCount : -1;
+      // 🌟 오늘의 스페셜 미션과 일치하면 서버에서도 기본 개수+1로 처리되므로, 화면에도 미리 반영해 "점프" 현상 방지
+      const isBuffMatch = (currentMode === 'praise' && app.dailyBuff && reason === app.dailyBuff);
+      if (isBuffMatch) score = baseCount + 1;
+
+      const round = app.currentBoard.round;
+      const prevScore = app.currentScore;
+      const localId = 'stamp_' + (++stampLocalIdSeq);
+
+      // --- 화면에 즉시 반영 (낙관적 업데이트) ---
+      const nowTs = Date.now();
+      const optimisticLog = {
+        date: new Date().toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false}).replace(/\. /g,'/').replace('.',''),
+        reason: reason, detail: detail, executor: app.userName,
+        score: score > 0 ? `+${score}` : `${score}`, rawScore: score,
+        runningTotal: app.currentScore + score, ts: nowTs, pending: true, localId: localId
+      };
+      app.currentScore += score;
+      app.logs.unshift(optimisticLog);
+      if (score > 0) app.currentStreak += 1; else app.currentStreak = 0;
+      app.lifetimeScore += (score > 0 ? score : 0);
+
+      renderBoard();
+      if(score < 0) applyPenaltyEffect();
+      document.getElementById('lifetimeScore').innerText = `${app.lifetimeScore} pts`;
+      document.getElementById('levelBar').style.width = `${(app.lifetimeScore % 50) * 2}%`;
+      document.getElementById('detailInput').value = '';
+
+      // --- 대기열에 추가하고 백그라운드 처리 시작 ---
+      stampQueue.push({ localId, round, reason, detail, score, executor: app.userName, role: currentRole, prevScore });
+      processStampQueue();
+    }
+
+    // 대기열에 쌓인 도장을 한 번에 하나씩 순서대로 서버에 저장합니다.
+    function processStampQueue() {
+      if (isSendingStamp || stampQueue.length === 0) return;
+      isSendingStamp = true;
+      const job = stampQueue.shift();
+      showSyncIndicator(stampQueue.length > 0 ? `구글시트에 저장 중... (대기 ${stampQueue.length}건)` : '구글시트에 저장 중...');
+
+      google.script.run
+        .withSuccessHandler(res => {
+          // 이 요청이 큐에 있는 동안 새로 찍힌(아직 서버로 안 간) 도장들은 그대로 화면에 살려둡니다.
+          const stillPendingLogs = app.logs.filter(l => l.pending && l.localId !== job.localId);
+          const pendingScoreSum = stillPendingLogs.reduce((s, l) => s + l.rawScore, 0);
+          const pendingLifetimeSum = stillPendingLogs.reduce((s, l) => s + (l.rawScore > 0 ? l.rawScore : 0), 0);
+          const pendingStreakCount = stillPendingLogs.filter(l => l.rawScore > 0).length;
+
+          app = res.data;
+          app.logs = [...stillPendingLogs, ...res.data.logs];
+          app.currentScore = res.data.currentScore + pendingScoreSum;
+          app.lifetimeScore = res.data.lifetimeScore + pendingLifetimeSum;
+          app.currentStreak = res.data.currentStreak + pendingStreakCount;
+
+          undoRows = res.rowsAdded;
+          boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
+
+          if (res.newlyCompleted) {
+            showToast("🎉 목표 달성! 보상이 보관함에 자동으로 담겼어요!");
+            confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
+            document.getElementById('soundFanfare').play();
+          }
+
+          const lucky = res.data.currentBoard.luckyStep;
+          if (lucky > 0 && job.prevScore < lucky && res.data.currentScore >= lucky) {
+            showToast(`🎁 추첨권 획득! 보관함을 확인하세요!`);
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          }
+          const target = res.data.currentBoard.targetScore;
+          const p50 = Math.floor(target * 0.5);
+          const p80 = Math.floor(target * 0.8);
+          if (job.prevScore < p50 && res.data.currentScore >= p50) { showToast("🙌 절반 달성! 대단해요!"); confetti({ particleCount: 40 }); }
+          if (job.prevScore < p80 && res.data.currentScore >= p80) { showToast("🔥 거의 다 왔어요! 80% 달성!"); confetti({ particleCount: 70 }); }
+
+          renderBoard();
+          showUndoBar();
+          hideSyncIndicator();
+          isSendingStamp = false;
+          processStampQueue(); // 큐에 남은 다음 도장 이어서 처리
+        })
+        .withFailureHandler(err => {
+          // 이 도장만 롤백 (다른 대기 중인/이미 저장된 도장은 그대로 유지)
+          const idx = app.logs.findIndex(l => l.pending && l.localId === job.localId);
+          if (idx > -1) {
+            const removed = app.logs.splice(idx, 1)[0];
+            app.currentScore -= removed.rawScore;
+            if (removed.rawScore > 0) { app.lifetimeScore -= removed.rawScore; }
+          }
+          renderBoard();
+          document.getElementById('lifetimeScore').innerText = `${app.lifetimeScore} pts`;
+          document.getElementById('levelBar').style.width = `${(app.lifetimeScore % 50) * 2}%`;
+          showSyncError("저장 실패! 되돌렸어요: " + err.message);
+          isSendingStamp = false;
+          processStampQueue(); // 이 건은 실패했어도 큐에 남은 다음 도장은 계속 진행
+        })
+        .addStampRecord(job.round, job.reason, job.detail, job.score, job.executor, job.role);
+    }
+
+    function applyPenaltyEffect() { document.getElementById('visualizer').classList.add('shake'); setTimeout(() => document.getElementById('visualizer').classList.remove('shake'), 400); }
+    function showUndoBar() {
+      clearTimeout(undoTimer);
+      const bar = document.getElementById('undoBar');
+      const prog = document.getElementById('undoProgress');
+      bar.classList.add('show');
+      prog.style.transition = 'none';
+      prog.style.width = '100%';
+      setTimeout(() => { prog.style.transition = 'width 10s linear'; prog.style.width = '0%'; }, 50);
+      undoTimer = setTimeout(() => { bar.classList.remove('show'); }, 10000);
+    }
+    function cancelUndo() {
+      if (isUndoingStamp) return; // 🔒 연타 방지
+      isUndoingStamp = true;
+      vibrate();
+      clearTimeout(undoTimer);
+      document.getElementById('undoBar').classList.remove('show');
+      showSyncIndicator('취소 처리 중...');
+      google.script.run.withSuccessHandler(res => {
+        app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); renderBoard(); showToast("기록이 취소되었습니다. ↩️"); hideSyncIndicator();
+        isUndoingStamp = false;
+      }).withFailureHandler(err => {
+        showSyncError("취소 실패: " + err.message);
+        isUndoingStamp = false;
+      })
+      .undoLastStamps(app.currentBoard.round, undoRows, currentRole);
+    }
+    function openModal(id) { vibrate(); document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { vibrate(); document.getElementById(id).classList.remove('active'); }
+    function closeModalOnBg(e, id) { if(e.target.id === id && modalPointerDownTarget && modalPointerDownTarget.id === id) closeModal(id); }
+    function showToast(m) { vibrate(10); const t = document.getElementById('toast'); t.innerText = m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
+
+    function promptAddReason() {
+      if (isAddingReason) return; // 🔒 연타 방지
+      vibrate();
+      const text = prompt(`새로운 사유를 입력하세요:`);
+      if(text && text.trim()) {
+        const val = text.trim();
+        let count = 1;
+        if (currentMode === 'praise') {
+          const countInput = prompt(`"${val}"을(를) 칭찬할 때 기본으로 몇 개의 스티커를 줄까요?`, '1');
+          if (countInput === null) return; // 취소하면 등록도 취소
+          count = parseInt(countInput);
+          if (isNaN(count) || count < 1) count = 1;
+          app.praiseList.push(val);
+          app.praiseCounts = app.praiseCounts || {};
+          app.praiseCounts[val] = count;
+        } else {
+          app.penaltyList.push(val);
+        }
+        setMode(currentMode); 
+        document.getElementById('reasonSelect').value = val;
+        isAddingReason = true;
+        google.script.run
+          .withSuccessHandler(res => { app = res; showToast("새 사유가 추가되었습니다."); isAddingReason = false; })
+          .withFailureHandler(err => { showToast("오류: " + err.message); isAddingReason = false; })
+          .addNewReasonToData(currentMode, val, currentRole, count);
+      }
+    }
+
+    function openEditBoardModal() {
+      document.getElementById('editTarget').value = app.currentBoard.targetScore;
+      document.getElementById('editReward').value = app.currentBoard.reward;
+      renderReasonCountList();
+      openModal('editBoardModal');
+    }
+
+    function renderReasonCountList() {
+      const container = document.getElementById('reasonCountList');
+      const counts = app.praiseCounts || {};
+      if (!app.praiseList || app.praiseList.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">등록된 칭찬 사유가 없어요.</p>';
+        return;
+      }
+      container.innerHTML = app.praiseList.map(reason => `
+        <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl">
+          <span class="flex-1 text-sm font-bold text-slate-600 truncate">${reason}</span>
+          <input type="number" min="1" value="${counts[reason] || 1}" id="reasonCount_${encodeURIComponent(reason)}" class="w-16 p-2 bg-white border border-slate-200 rounded-lg text-center font-black text-sm outline-none">
+          <span class="text-xs text-slate-400 font-bold">개</span>
+          <button onclick="saveReasonCount('${reason.replace(/'/g, "\\'")}')" class="px-3 py-2 bg-indigo-500 text-white text-xs font-black rounded-lg active:scale-95 transition">저장</button>
+        </div>
+      `).join('');
+    }
+
+    let isSavingReasonCount = false;
+    function saveReasonCount(reason) {
+      if (isSavingReasonCount) return; // 🔒 연타 방지
+      const input = document.getElementById('reasonCount_' + encodeURIComponent(reason));
+      let count = parseInt(input.value);
+      if (isNaN(count) || count < 1) count = 1;
+      isSavingReasonCount = true;
+      vibrate();
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          renderReasonCountList();
+          showToast(`"${reason}" 사유의 스티커 개수가 ${count}개로 저장됐어요.`);
+          isSavingReasonCount = false;
+        })
+        .withFailureHandler(err => { showToast("오류: " + err.message); isSavingReasonCount = false; })
+        .updateReasonCount(reason, count, currentRole);
+    }
+
+    function saveBoardEdit() {
+      vibrate();
+      const t = document.getElementById('editTarget').value;
+      const r = document.getElementById('editReward').value;
+      if(!t || !r) { showToast("값을 모두 입력해주세요!"); return; }
+      const btn = document.getElementById('btnSaveEdit');
+      btn.disabled = true; btn.innerText = "저장 중...";
+      google.script.run
+        .withSuccessHandler(res => { app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); renderBoard(); closeModal('editBoardModal'); showToast("판 설정이 수정되었습니다. ⚙️"); btn.disabled = false; btn.innerText = "판 설정 저장"; })
+        .withFailureHandler(err => { showToast("오류: " + err.message); btn.disabled = false; btn.innerText = "판 설정 저장"; })
+        .updateBoardSettings(app.currentBoard.round, t, r, currentRole);
+    }
+
+    function openNewBoardUI() {
+      if (isCreatingBoard) return; // 🔒 연타 방지
+      vibrate();
+      const target = prompt('새 칭찬판의 목표 개수:', '30'); if(!target) return;
+      const reward = prompt('이번 목표 달성 보상:', '보상 입력'); if(!reward) return;
+      isCreatingBoard = true;
+      google.script.run
+        .withSuccessHandler(res => { app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); renderBoard(); showToast("새 칭찬판이 시작되었습니다! ✨"); isCreatingBoard = false; })
+        .withFailureHandler(err => { showToast("오류: " + err.message); isCreatingBoard = false; })
+        .createNewBoard(Number(target), reward, currentRole);
+    }
+
+    function openBoardHistoryModal() {
+      const list = document.getElementById('boardHistoryList');
+      list.innerHTML = app.boards.map(b => `
+        <li class="bg-white p-4 rounded-xl border border-slate-200 cursor-pointer hover:bg-indigo-50 shadow-sm transition" onclick="changeBoard(${b.round})">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-black text-indigo-500">${b.round}회차 <span class="text-xs text-slate-400">(${b.status})</span></span>
+          </div>
+          <div class="font-bold text-slate-700">목표: ${b.reward} <span class="text-xs text-slate-400">(${b.targetScore}개)</span></div>
+        </li>
+      `).join('');
+      openModal('boardHistoryModal');
+    }
+
+    // 🚀 회차 전환: 캐시에 있으면 서버 호출 없이 즉시 전환 (조회 체감속도 대폭 개선)
+    // 캐시가 없을 때만 서버에서 불러오고, 백그라운드로 최신 데이터를 다시 한번 조용히 갱신합니다.
+    function changeBoard(round) {
+      if (isChangingBoard) return; // 🔒 연타 방지
+      vibrate();
+      closeModal('boardHistoryModal');
+      const key = String(round);
+
+      if (boardCache[key]) {
+        app = JSON.parse(JSON.stringify(boardCache[key]));
+        renderBoard();
+        showToast(`${round}회차로 이동했습니다.`);
+        // 최신 상태로 조용히 백그라운드 갱신 (다른 기기에서 그 사이 기록이 추가됐을 수 있으므로)
+        isChangingBoard = true;
+        google.script.run
+          .withSuccessHandler(res => {
+            boardCache[key] = JSON.parse(JSON.stringify(res));
+            if (app.currentBoard.round == round) { app = res; renderBoard(); }
+            isChangingBoard = false;
+          })
+          .withFailureHandler(() => { isChangingBoard = false; })
+          .getAppData(round, currentRole);
+        return;
+      }
+
+      isChangingBoard = true;
+      showSyncIndicator('불러오는 중...');
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          boardCache[key] = JSON.parse(JSON.stringify(res));
+          renderBoard();
+          showToast(`${round}회차로 이동했습니다.`);
+          hideSyncIndicator();
+          isChangingBoard = false;
+        })
+        .withFailureHandler(err => { showSyncError("불러오기 실패: " + err.message); isChangingBoard = false; })
+        .getAppData(round, currentRole);
+    }
+
+    // 🎰 "이름:비율" 텍스트를 [{name, ratio}] 형태로 파싱합니다. ratio가 없으면 null(자동배분).
+    function parseLuckyBoxText(text) {
+      return text.split('\n').map(s => s.trim()).filter(s => s !== '').map(line => {
+        const idx = line.lastIndexOf(':');
+        if (idx > -1) {
+          const name = line.slice(0, idx).trim();
+          const ratioStr = line.slice(idx + 1).trim();
+          const ratio = ratioStr === '' ? null : parseFloat(ratioStr);
+          return { name: name, ratio: (ratio !== null && !isNaN(ratio) && ratio > 0) ? ratio : null };
+        }
+        return { name: line, ratio: null };
+      }).filter(p => p.name !== '');
+    }
+
+    // [{name, ratio}] -> [{name, weight}] (weight는 합이 1이 되는 실제 당첨 확률)
+    // 규칙: 비율 전체 빈칸이면 1/N씩. 일부만 적혀있으면, 적힌 비율(%)만큼 배정하고
+    // 남은 확률(100-적힌 비율 합)을 빈칸끼리 똑같이 나눠 가집니다.
+    function resolvePrizeWeights(prizes) {
+      const specified = prizes.filter(p => p.ratio !== null && p.ratio !== undefined);
+      const blank = prizes.filter(p => p.ratio === null || p.ratio === undefined);
+      const specifiedSum = specified.reduce((s, p) => s + p.ratio, 0);
+
+      let result;
+      if (blank.length === prizes.length || specifiedSum <= 0) {
+        const each = 1 / prizes.length;
+        result = prizes.map(p => ({ name: p.name, weight: each }));
+      } else if (specifiedSum >= 100) {
+        result = prizes.map(p => (p.ratio !== null && p.ratio !== undefined)
+          ? { name: p.name, weight: p.ratio / specifiedSum }
+          : { name: p.name, weight: 0 });
+      } else {
+        const remaining = 100 - specifiedSum;
+        const eachBlank = blank.length > 0 ? (remaining / 100) / blank.length : 0;
+        result = prizes.map(p => (p.ratio !== null && p.ratio !== undefined)
+          ? { name: p.name, weight: p.ratio / 100 }
+          : { name: p.name, weight: eachBlank });
+      }
+      const total = result.reduce((s, p) => s + p.weight, 0);
+      return total > 0 ? result.map(p => ({ name: p.name, weight: p.weight / total })) : result;
+    }
+
+    // 저장된 luckyText(이전 형식: 이름 배열 / 새 형식: {name,ratio} 배열)를 [{name,ratio}]로 통일
+    function normalizeLuckyText(text) {
+      if (!text) return [];
+      try {
+        let arr = JSON.parse(text);
+        if (!Array.isArray(arr) || arr.length === 0) return text ? [{ name: text, ratio: null }] : [];
+        if (typeof arr[0] === 'string') return arr.map(name => ({ name: name, ratio: null })); // 이전 형식 호환
+        return arr.map(p => ({ name: p.name, ratio: (p.ratio === undefined ? null : p.ratio) }));
+      } catch (e) {
+        return [{ name: text, ratio: null }];
+      }
+    }
+
+    function openLuckyBoxModal() {
+      const sel = document.getElementById('luckyStepSelect');
+      sel.innerHTML = '';
+      for(let i = app.currentScore + 1; i <= app.currentBoard.targetScore; i++) sel.innerHTML += `<option value="${i}">${i}번째 칸</option>`;
+      document.getElementById('luckyBoxTextarea').value = '';
+      openModal('luckyBoxModal');
+    }
+
+    function openEditLuckyBox(event) {
+      event.stopPropagation();
+      vibrate();
+      const sel = document.getElementById('luckyStepSelect');
+      sel.innerHTML = '';
+      for(let i = app.currentScore + 1; i <= app.currentBoard.targetScore; i++) sel.innerHTML += `<option value="${i}">${i}번째 칸</option>`;
+      if(app.currentBoard.luckyStep > app.currentScore) sel.value = app.currentBoard.luckyStep;
+
+      const prizes = normalizeLuckyText(app.currentBoard.luckyText);
+      const lines = prizes.map(p => (p.ratio !== null && p.ratio !== undefined) ? `${p.name}:${p.ratio}` : p.name);
+      document.getElementById('luckyBoxTextarea').value = lines.join('\n');
+      openModal('luckyBoxModal');
+    }
+    
+    function saveLuckyBox() {
+      vibrate();
+      const step = document.getElementById('luckyStepSelect').value;
+      const raw = document.getElementById('luckyBoxTextarea').value;
+      const prizes = parseLuckyBoxText(raw); // [{name, ratio}]
+      if(!step || prizes.length === 0) { showToast("럭키박스 내용을 하나 이상 적어주세요!"); return; }
+      const text = JSON.stringify(prizes);
+      const btn = document.getElementById('btnSaveLucky');
+      btn.disabled = true; btn.innerText = "저장 중...";
+      google.script.run
+        .withSuccessHandler(res => { app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); closeModal('luckyBoxModal'); showToast("럭키박스 룰렛 설정 완료! 🎰"); renderBoard(); btn.disabled = false; btn.innerText = "저장하기"; })
+        .withFailureHandler(err => { showToast("오류: " + err.message); btn.disabled = false; btn.innerText = "저장하기"; })
+        .updateLuckyBox(app.currentBoard.round, step, text, currentRole);
+    }
+
+    function triggerReward() {
+      if (isClaimingReward) return; // 🔒 연타 방지
+      isClaimingReward = true;
+      vibrate(100);
+      document.getElementById('soundFanfare').play();
+      confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
+      setTimeout(() => { 
+        google.script.run
+          .withSuccessHandler(res => { app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); renderBoard(); showToast("보상 수령 완료!"); isClaimingReward = false; })
+          .withFailureHandler(err => { showToast("오류: " + err.message); isClaimingReward = false; })
+          .claimReward(app.currentBoard.round, currentRole); 
+      }, 2000);
+    }
+
+    function openRequestModal() {
+      document.getElementById('reqReasonSelect').innerHTML = app.praiseList.map(r => `<option value="${r}">${r}</option>`).join('');
+      openModal('requestModal');
+    }
+    
+    function submitRequest() {
+      vibrate();
+      const reason = document.getElementById('reqReasonSelect').value;
+      const detail = document.getElementById('reqDetailInput').value;
+      const btn = document.getElementById('btnSendReq');
+      btn.disabled = true; btn.innerText = "전송 중...";
+      google.script.run
+        .withSuccessHandler(() => { closeModal('requestModal'); showToast("엄마/아빠에게 요청을 보냈어요! 💌"); btn.disabled = false; btn.innerText = "부모님께 요청 보내기"; })
+        .withFailureHandler(err => { showToast("오류: " + err.message); btn.disabled = false; btn.innerText = "부모님께 요청 보내기"; })
+        .sendStampRequest(reason, detail, app.userName);
+    }
+
+    function switchMainTab(type) {
+      vibrate();
+      currentBoxType = type;
+      document.getElementById('mainTabReward').className = type === '보상' ? 'flex-1 py-3 font-black text-indigo-600 border-b-2 border-indigo-500 bg-indigo-50' : 'flex-1 py-3 font-bold text-slate-400 border-b-2 border-transparent bg-white';
+      document.getElementById('mainTabRandom').className = type === '랜덤박스' ? 'flex-1 py-3 font-black text-indigo-600 border-b-2 border-indigo-500 bg-indigo-50' : 'flex-1 py-3 font-bold text-slate-400 border-b-2 border-transparent bg-white';
+      renderItems();
+    }
+
+    function switchItemTab(tab) {
+      vibrate();
+      currentItemTab = tab;
+      document.getElementById('tabUnused').className = tab === 'unused' ? 'flex-1 py-2 text-sm font-black text-pink-600 border-b-2 border-pink-500 bg-white' : 'flex-1 py-2 text-sm font-bold text-slate-400 border-b-2 border-transparent bg-slate-100';
+      document.getElementById('tabUsed').className = tab === 'used' ? 'flex-1 py-2 text-sm font-black text-pink-600 border-b-2 border-pink-500 bg-white' : 'flex-1 py-2 text-sm font-bold text-slate-400 border-b-2 border-transparent bg-slate-100';
+      renderItems();
+    }
+
+    function openItemShop() { vibrate(); renderItems(); openModal('itemShopModal'); }
+
+    function renderItems() {
+      const list = document.getElementById('itemList');
+      const statusFilter = currentItemTab === 'unused' ? '사용 전' : '사용 후';
+      const filtered = app.items.filter(i => i.status === statusFilter && i.type === currentBoxType);
+      
+      if(filtered.length === 0) {
+        list.innerHTML = `<p class="text-center text-slate-400 py-10 font-bold">목록이 비어있어요.</p>`;
+        return;
+      }
+      
+      list.innerHTML = filtered.map(item => {
+        const isTicket = item.name === '룰렛 추첨권' && currentBoxType === '랜덤박스';
+        return `
+        <li class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition">
+          <div class="flex justify-between items-center mb-2">
+            <h4 class="font-black text-lg text-slate-700">${isTicket ? '🎟️' : '🎁'} ${item.name}</h4>
+            <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">${item.round}회차</span>
+          </div>
+          <div class="text-[11px] text-slate-500 space-y-1 font-bold">
+            <p>획득: ${item.obtainedDate}</p>
+            ${item.status === '사용 후' ? `<p class="text-pink-500">사용: ${item.usedDate}</p>` : ''}
+          </div>
+          ${item.status === '사용 전' ? (app.isParent ? `
+            <p class="text-xs font-bold text-slate-400 mt-3 text-center bg-slate-100 py-2 rounded-lg">자녀 기기에서 사용할 수 있습니다</p>
+          ` : `
+            <button onclick="handleItemClick('${item.id}', '${item.name}', this)" class="w-full mt-3 py-3 bg-${currentBoxType === '보상' ? 'indigo' : 'pink'}-500 text-white font-black rounded-xl active:scale-95 transition shadow-md text-sm">
+              ${isTicket ? '추첨하기 🎯' : '사용하기'}
+            </button>
+          `) : ''}
+        </li>
+      `}).join('');
+    }
+
+    function handleItemClick(id, name, btn) {
+      if (name === '룰렛 추첨권') {
+        openRoulette(id);
+      } else {
+        let match = name.match(/\d+/);
+        if (match) {
+          let max = parseInt(match[0]);
+          let useAmount = prompt(`[${name}]\n숫자가 포함된 보상입니다.\n얼마를 분할 사용할까요? (최대 ${max})`, max);
+          if(useAmount === null) return;
+          useAmount = parseInt(useAmount);
+          if(isNaN(useAmount) || useAmount <= 0 || useAmount > max) { alert("범위를 벗어난 숫자입니다."); return; }
+          if(!confirm(`[${name}]\n${useAmount} 만큼 차감 사용 처리를 진행할까요?`)) return;
+          callUseSplitApi(id, btn, useAmount, max);
+        } else {
+          if(!confirm(`이 보상을 바로 사용할까요?`)) return;
+          callUseSplitApi(id, btn, null, null);
+        }
+      }
+    }
+
+    function callUseSplitApi(id, btn, useAmount, maxAmount) {
+      vibrate();
+      btn.disabled = true; btn.innerText = "처리 중...";
+      google.script.run
+        .withSuccessHandler(res => { app = res; renderItems(); showToast("사용 처리 성공! 부모님 이메일 통보 완료 💌"); })
+        .withFailureHandler(err => { showToast("오류: " + err.message); btn.disabled = false; btn.innerText = "사용하기"; })
+        .useItemSplit(id, app.userName, useAmount, maxAmount);
+    }
+
+    function openRoulette(ticketId) {
+      currentRouletteTicketId = ticketId;
+      closeModal('itemShopModal');
+      const rawPrizes = normalizeLuckyText(app.currentBoard.luckyText).length > 0
+        ? normalizeLuckyText(app.currentBoard.luckyText)
+        : [{ name: '꽝', ratio: null }, { name: '다시 뽑기', ratio: null }];
+      roulettePrizes = resolvePrizeWeights(rawPrizes); // [{name, weight}]
+      drawRouletteWheel();
+      const legend = document.getElementById('rouletteLegend');
+      legend.innerHTML = roulettePrizes.map((p, i) => `
+        <span class="px-2 py-1 rounded text-white shadow-sm" style="background-color: ${ROULETTE_COLORS[i % ROULETTE_COLORS.length]}">${p.name} (${Math.round(p.weight * 100)}%)</span>
+      `).join('');
+      document.getElementById('rouletteCanvas').style.transform = `rotate(0deg)`;
+      document.getElementById('btnSpinRoulette').disabled = false;
+      document.getElementById('btnSpinRoulette').innerText = "돌리기 시작!";
+      openModal('rouletteModal');
+    }
+
+    function drawRouletteWheel() {
+      const canvas = document.getElementById('rouletteCanvas');
+      const ctx = canvas.getContext('2d');
+      const cx = canvas.width / 2, cy = canvas.height / 2;
+      const radius = cx;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let startAngle = 0;
+      roulettePrizes.forEach((p, i) => {
+        const sliceAngle = Math.max(p.weight, 0) * Math.PI * 2;
+        const endAngle = startAngle + sliceAngle;
+        ctx.beginPath();
+        ctx.fillStyle = ROULETTE_COLORS[i % ROULETTE_COLORS.length];
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, startAngle, endAngle, false);
+        ctx.lineTo(cx, cy);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px sans-serif";
+        let label = p.name;
+        if(label.length > 8) label = label.substring(0,7) + '..';
+        ctx.fillText(label, radius - 20, 5);
+        ctx.restore();
+        startAngle = endAngle;
+      });
+    }
+
+    function spinRoulette() {
+      if(roulettePrizes.length === 0) return;
+      vibrate(50);
+      const btn = document.getElementById('btnSpinRoulette');
+      btn.disabled = true; btn.innerText = "돌아가는 중... 🌀";
+      const canvas = document.getElementById('rouletteCanvas');
+      const spinAngleStart = Math.random() * 360 + 360 * 5; 
+      const spinTimeTotal = 4000;
+      canvas.style.transform = `rotate(${spinAngleStart}deg)`;
+      setTimeout(() => {
+        const actualDeg = spinAngleStart % 360;
+        // 포인터(12시 방향)가 가리키는, 회전 전 원래 각도(도) -> 라디안
+        const normalizedDeg = (360 - actualDeg + 270) % 360;
+        const targetRad = normalizedDeg * Math.PI / 180;
+        // 조각별 비율(가중치)에 맞춰 어느 조각인지 탐색
+        let acc = 0;
+        let prizeIndex = roulettePrizes.length - 1;
+        for (let i = 0; i < roulettePrizes.length; i++) {
+          const sliceAngle = Math.max(roulettePrizes[i].weight, 0) * Math.PI * 2;
+          if (targetRad < acc + sliceAngle) { prizeIndex = i; break; }
+          acc += sliceAngle;
+        }
+        const wonPrize = roulettePrizes[prizeIndex].name;
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+        btn.innerText = `🎉 ${wonPrize} 당첨!!`;
+        setTimeout(() => {
+          showToast(`아이템 보관함 저장 중...`);
+          google.script.run
+            .withSuccessHandler(res => { app = res; closeModal('rouletteModal'); showToast("보관함 보관 완료! 🎁"); renderBoard(); })
+            .withFailureHandler(err => alert("에러: " + err.message))
+            .saveRouletteResult(currentRouletteTicketId, wonPrize);
+        }, 2000);
+      }, spinTimeTotal);
+    }
+
+    // 📌 3번 기능: 소원수리함 인터페이스 제어 모듈
+    function openWishlistModal() {
+      vibrate();
+      document.getElementById('childWishInputArea').className = app.isParent ? 'hidden' : 'block space-y-2 bg-white p-4 rounded-2xl shadow-sm border';
+      renderWishes();
+      openModal('wishlistModal');
+    }
+    function submitWish() {
+      if (isSubmittingWish) return; // 🔒 연타 방지
+      const txt = document.getElementById('wishInput').value.trim();
+      if(!txt) { showToast("소원 내용을 채워주세요!"); return; }
+      isSubmittingWish = true;
+      const btn = document.getElementById('btnSubmitWish');
+      btn.disabled = true; btn.innerText = "접수 중...";
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          document.getElementById('wishInput').value = '';
+          renderWishes();
+          showToast("소원상자에 접수되었습니다! ✉️");
+          isSubmittingWish = false; btn.disabled = false; btn.innerText = "소원 상자에 넣기 ✉️";
+        })
+        .withFailureHandler(err => {
+          showToast("오류: " + err.message);
+          isSubmittingWish = false; btn.disabled = false; btn.innerText = "소원 상자에 넣기 ✉️";
+        })
+        .addWish(app.currentBoard.round, txt);
+    }
+
+    // 소원 상태별 배지 색상 결정
+    function getWishBadgeClass(status) {
+      if (status === '대기 중') return 'bg-amber-100 text-amber-600';
+      if (status === '소원 성취! ✨') return 'bg-emerald-100 text-emerald-600';
+      return 'bg-slate-200 text-slate-500'; // 다음에 들어줄게
+    }
+
+    function renderWishes() {
+      const container = document.getElementById('wishListContainer');
+      if(!app.wishes || app.wishes.length === 0) {
+        container.innerHTML = '<p class="text-center text-slate-400 py-6 text-sm font-bold">등록된 소원이 없어요.</p>';
+        return;
+      }
+      container.innerHTML = app.wishes.map(w => {
+        const isPending = w.status === '대기 중';
+        let bodyHtml = '';
+
+        if (app.isParent && isPending) {
+          // 부모: 답변 전 소원 → 코멘트 입력 + 이뤄주기 / 다음에 들어줄게 버튼
+          bodyHtml = `
+            <textarea id="wishComment_${w.id}" class="w-full mt-2 p-2.5 bg-slate-50 rounded-xl text-xs font-bold outline-none border border-slate-100" rows="2" placeholder="아이에게 남길 코멘트를 적어주세요 (선택)"></textarea>
+            <div class="flex gap-2 mt-2">
+              <button id="wishApprove_${w.id}" onclick="handleWish('${w.id}', 'approve')" class="flex-1 py-1.5 bg-emerald-500 text-white text-xs font-black rounded-lg active:scale-95 transition shadow-sm">이뤄주기 ✨</button>
+              <button id="wishDecline_${w.id}" onclick="handleWish('${w.id}', 'decline')" class="flex-1 py-1.5 bg-amber-400 text-white text-xs font-black rounded-lg active:scale-95 transition shadow-sm">다음에 들어줄게 🙏</button>
+            </div>
+            <button onclick="handleWish('${w.id}', 'delete')" class="w-full mt-1 py-1 text-[10px] text-slate-300 font-bold">잘못 등록했어요 (삭제)</button>
+          `;
+        } else if (!isPending) {
+          // 이미 답변한 소원: 삭제하지 않고 코멘트와 함께 계속 기록으로 남김
+          bodyHtml = w.comment
+            ? `<p class="text-xs text-slate-500 mt-2 bg-slate-50 p-2.5 rounded-xl font-bold">💬 ${w.comment}</p>`
+            : '';
+        }
+
+        return `
+          <li class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div class="flex justify-between items-start">
+              <p class="font-black text-slate-700">${w.text}</p>
+              <span class="text-[10px] font-black px-2 py-0.5 rounded-md whitespace-nowrap ml-2 ${getWishBadgeClass(w.status)}">${w.status}</span>
+            </div>
+            <p class="text-[10px] text-slate-400 font-bold mt-1">${w.date} (${w.round}회차 접수)</p>
+            ${bodyHtml}
+          </li>
+        `;
+      }).join('');
+    }
+
+    function handleWish(id, action) {
+      if (processingWishIds.has(id)) return; // 🔒 연타 방지 (같은 소원에 대한 중복 요청 차단)
+
+      if (action === 'delete') {
+        if(!confirm("이 소원 기록을 삭제하시겠습니까?")) return;
+      }
+
+      const commentEl = document.getElementById(`wishComment_${id}`);
+      const comment = commentEl ? commentEl.value.trim() : '';
+
+      if (action === 'decline' && !comment) {
+        if(!confirm("코멘트 없이 진행할까요? 이유를 남겨주면 아이가 더 잘 이해할 수 있어요.")) return;
+      }
+
+      processingWishIds.add(id);
+      vibrate();
+      const approveBtn = document.getElementById(`wishApprove_${id}`);
+      const declineBtn = document.getElementById(`wishDecline_${id}`);
+      if (approveBtn) { approveBtn.disabled = true; }
+      if (declineBtn) { declineBtn.disabled = true; }
+
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          renderWishes();
+          showToast(action === 'approve' ? "소원 성취 완료! 🎉" : action === 'decline' ? "코멘트와 함께 전달했어요." : "삭제되었습니다.");
+          processingWishIds.delete(id);
+        })
+        .withFailureHandler(err => {
+          showToast("오류: " + err.message);
+          processingWishIds.delete(id);
+          if (approveBtn) approveBtn.disabled = false;
+          if (declineBtn) declineBtn.disabled = false;
+        })
+        .handleWishStatus(app.currentBoard.round, id, action, comment, currentRole);
+    }
+
+    // 📌 4번 기능: 오늘의 스페셜 미션 인터페이스 제어 모듈
+    function openSpecialPraiseModal() {
+      vibrate();
+      const sel = document.getElementById('buffSelect');
+      sel.innerHTML = app.praiseList.map(r => `<option value="${r}">${r}</option>`).join('');
+      document.getElementById('newBuffInput').value = '';
+      openModal('specialPraiseModal');
+    }
+    function saveDailyBuff() {
+      if (isSavingBuff) return; // 🔒 연타 방지
+      let txt = document.getElementById('newBuffInput').value.trim();
+      if(!txt) txt = document.getElementById('buffSelect').value;
+      if(!txt) { showToast("사유를 선택하거나 입력해 주세요!"); return; }
+      isSavingBuff = true;
+      const saveBtn = document.getElementById('btnSaveBuff'), clearBtn = document.getElementById('btnClearBuff');
+      saveBtn.disabled = true; clearBtn.disabled = true;
+      google.script.run
+        .withSuccessHandler(res => { app = res; renderBoard(); closeModal('specialPraiseModal'); showToast("스페셜 버프 미션 가동 완료! 🌟"); isSavingBuff = false; saveBtn.disabled = false; clearBtn.disabled = false; })
+        .withFailureHandler(err => { showToast("오류: " + err.message); isSavingBuff = false; saveBtn.disabled = false; clearBtn.disabled = false; })
+        .setDailyBuff(app.currentBoard.round, txt, currentRole);
+    }
+    function clearDailyBuff() {
+      if (isSavingBuff) return; // 🔒 연타 방지
+      isSavingBuff = true;
+      const saveBtn = document.getElementById('btnSaveBuff'), clearBtn = document.getElementById('btnClearBuff');
+      saveBtn.disabled = true; clearBtn.disabled = true;
+      google.script.run
+        .withSuccessHandler(res => { app = res; renderBoard(); closeModal('specialPraiseModal'); showToast("스페셜 미션이 해제되었습니다."); isSavingBuff = false; saveBtn.disabled = false; clearBtn.disabled = false; })
+        .withFailureHandler(err => { showToast("오류: " + err.message); isSavingBuff = false; saveBtn.disabled = false; clearBtn.disabled = false; })
+        .setDailyBuff(app.currentBoard.round, '', currentRole);
+    }
+
+    function renderLogs() {
+      const list = document.getElementById('logList');
+      list.innerHTML = app.logs.length === 0 ? '<li class="text-center text-slate-400 py-4">기록이 없습니다.</li>' : app.logs.map(log => `
+        <li class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-3 ${log.pending ? 'opacity-60' : ''}">
+          <div class="mt-1 bg-indigo-100 text-indigo-600 font-black text-xs px-2 py-1 rounded-lg whitespace-nowrap shrink-0">
+            ${log.runningTotal}칸
+          </div>
+          <div class="flex-1">
+            <p class="font-black text-slate-700">${log.reason}</p>
+            ${log.detail ? `<p class="text-xs text-slate-500 mt-1 mb-1 font-bold">↳ ${log.detail}</p>` : ''}
+            <p class="text-[10px] text-slate-400 font-bold">${log.date} · ${log.executor}${log.pending ? ' · 저장 중...' : ''}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <span class="text-lg font-black ${log.rawScore > 0 ? 'text-blue-500' : (log.rawScore < 0 ? 'text-red-500' : 'text-slate-400')}">${log.score}</span>
+          </div>
+        </li>
+      `).join('');
+    }
+  </script>
+</body>
+</html>
