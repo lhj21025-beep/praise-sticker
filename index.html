@@ -464,13 +464,13 @@
     // Firebase 설정: 아래 값을 본인의 Firebase 프로젝트 설정값으로 반드시 바꿔주세요.
     // (Firebase 콘솔 → 프로젝트 설정 → 일반 → 내 앱 → SDK 설정 및 구성 에서 확인)
     const firebaseConfig = {
-  apiKey: "AIzaSyAW-ItTRaZj4fWs57g_vpF-FGWgsKIEpj8",
-  authDomain: "praise-sticker-756b4.firebaseapp.com",
-  projectId: "praise-sticker-756b4",
-  storageBucket: "praise-sticker-756b4.firebasestorage.app",
-  messagingSenderId: "271275758860",
-  appId: "1:271275758860:web:4c1c430cb1c9329426e529"
-};
+      apiKey: "여기에_API_KEY를_입력하세요",
+      authDomain: "여기에_프로젝트ID.firebaseapp.com",
+      projectId: "여기에_프로젝트ID를_입력하세요",
+      storageBucket: "여기에_프로젝트ID.appspot.com",
+      messagingSenderId: "여기에_발신자ID를_입력하세요",
+      appId: "여기에_앱ID를_입력하세요"
+    };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
@@ -561,16 +561,21 @@
         return getAppData(1, role);
       }
 
-      const logsSnap = await db.collection('logs').where('round','==',currentBoard.round).orderBy('date','asc').get();
-      let currentScore = 0, logs = [], countsByReason = {};
+      const logsSnap = await db.collection('logs').where('round','==',currentBoard.round).get();
+      let currentScore = 0, logEntries = [], countsByReason = {};
       logsSnap.forEach(d => {
         const l = d.data();
+        logEntries.push({ id: d.id, ...l, ts: new Date(l.date).getTime() });
+      });
+      logEntries.sort((a,b) => a.ts - b.ts); // 오래된 순으로 정렬 (runningTotal 계산용)
+      let logs = [];
+      logEntries.forEach(l => {
         const score = Number(l.score);
         currentScore += score;
         if (score > 0 && l.executor !== '시스템') countsByReason[l.reason] = (countsByReason[l.reason]||0) + 1;
         logs.push({
-          id: d.id, date: fmtShort(l.date), reason: l.reason, detail: l.detail || '', executor: l.executor,
-          score: score > 0 ? `+${score}` : score, rawScore: score, runningTotal: currentScore, ts: new Date(l.date).getTime()
+          id: l.id, date: fmtShort(l.date), reason: l.reason, detail: l.detail || '', executor: l.executor,
+          score: score > 0 ? `+${score}` : score, rawScore: score, runningTotal: currentScore, ts: l.ts
         });
       });
       logs.sort((a,b) => b.ts - a.ts);
@@ -612,8 +617,9 @@
       logsSnap.forEach(d => score += Number(d.data().score));
       if (score < board.targetScore) return false;
 
-      const itemsSnap = await db.collection('items').where('round','==',round).where('type','==','보상').get();
-      if (!itemsSnap.empty) return false;
+      const itemsSnap = await db.collection('items').where('round','==',round).get();
+      const hasReward = itemsSnap.docs.some(d => d.data().type === '보상');
+      if (hasReward) return false;
 
       await boardRef.update({ status: '보상 수령 완료' });
       await db.collection('items').add({ round, name: board.reward, obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'보상' });
@@ -622,10 +628,11 @@
 
     async function addStampRecord(round, reason, detail, score, executor, role) {
       await ensureAuth();
-      const logsSnap = await db.collection('logs').where('round','==',round).orderBy('date','asc').get();
+      const logsSnap = await db.collection('logs').where('round','==',round).get();
       let curScore = 0;
       const roundLogs = [];
       logsSnap.forEach(d => { const l = d.data(); curScore += Number(l.score); roundLogs.push(l); });
+      roundLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // 오래된 순 정렬 (스트릭 계산용)
 
       if (score < 0 && curScore <= 0) return { data: await getAppData(round, role), rowsAdded: [] };
 
@@ -676,8 +683,8 @@
 
     async function recoverLastPenalty(round, role) {
       await ensureAuth();
-      const logsSnap = await db.collection('logs').where('round','==',round).orderBy('date','asc').get();
-      const docs = logsSnap.docs;
+      const logsSnap = await db.collection('logs').where('round','==',round).get();
+      const docs = logsSnap.docs.slice().sort((a,b) => new Date(a.data().date).getTime() - new Date(b.data().date).getTime());
       let target = null;
       for (let i = docs.length - 1; i >= 0; i--) {
         if (Number(docs[i].data().score) < 0) { target = docs[i]; break; }
@@ -710,7 +717,7 @@
     // ===== 🔥 소원수리함 =====
     async function addWish(round, wishText) {
       await ensureAuth();
-      const recentSnap = await db.collection('wishes').where('round','==',round).orderBy('date','desc').limit(3).get();
+      const recentSnap = await db.collection('wishes').where('round','==',round).get();
       const now = Date.now();
       let dup = false;
       recentSnap.forEach(d => { const w = d.data(); if (w.text === wishText && (now - new Date(w.date).getTime()) < 4000) dup = true; });
