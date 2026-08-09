@@ -45,7 +45,6 @@
     .puzzle-piece.active { opacity: 0; transform: scale(1.2) rotate(4deg); } 
     .puzzle-piece.lucky { border: 2px solid #fbbf24; animation: pulse 1.5s infinite; }
 
-    /* ===== 🌡️ 온도계 테마: 실제 온도계처럼 눈금을 따라 수은주가 차오릅니다 ===== */
     .thermo-wrap { position: relative; width: 100%; height: 100%; }
     .thermo-label { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 900; color: #ef4444; letter-spacing: 0.02em; }
     .thermo-tube-outer { position: absolute; top: 42px; bottom: 76px; left: 50%; transform: translateX(-50%); width: 56px; background: linear-gradient(180deg, #f8fafc, #e2e8f0); border-radius: 30px; border: 4px solid #cbd5e1; overflow: visible; box-shadow: inset 0 4px 10px rgba(0,0,0,0.08); }
@@ -55,7 +54,6 @@
     .thermo-bulb { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 76px; height: 76px; border-radius: 50%; background: radial-gradient(circle at 32% 28%, #fca5a5, #dc2626 72%); border: 4px solid #cbd5e1; box-shadow: 0 4px 10px rgba(220,38,38,0.35); display:flex; align-items:center; justify-content:center; font-weight:900; color:#fff; font-size:13px; }
     .thermo-lucky { position: absolute; right: -30px; transform: translateY(50%); font-size: 20px; animation: pulse 1.5s infinite; }
 
-    /* ===== 🌸 칭찬의 꽃 테마: 하늘+잔디 정원에 꽃이 자라납니다 ===== */
     .garden-bed { position: absolute; inset: 0; background: linear-gradient(180deg, #dbeafe 0%, #dbeafe 58%, #86efac 58%, #4ade80 100%); border-radius: 1.25rem; overflow: hidden; }
     .garden-flowers { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 3px; padding: 0 12px; }
     .garden-flower { font-size: 1.55rem; transition: transform 0.3s; }
@@ -64,7 +62,6 @@
     .garden-cloud { position: absolute; font-size: 1.2rem; opacity: 0.8; }
     @keyframes bloomPop { 0% { transform: scale(0) translateY(12px); } 65% { transform: scale(1.35) translateY(-4px); } 100% { transform: scale(1) translateY(0); } }
 
-    /* ===== 🚀 꿈의 로켓 테마: 밤하늘을 가르며 목표(달)를 향해 날아갑니다 ===== */
     .rocket-sky { position: absolute; inset: 0; background: linear-gradient(180deg, #0f172a, #4338ca 55%, #818cf8); border-radius: 20px; overflow: hidden; box-shadow: inset 0 4px 14px rgba(0,0,0,0.3); }
     .rocket-star { position: absolute; font-size: 13px; opacity: 0.9; }
     .rocket-current { position: absolute; left: 50%; bottom: 0; transform: translate(-50%, 50%); font-size: 28px; transition: bottom 0.8s cubic-bezier(.34,1.56,.64,1); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)); }
@@ -72,7 +69,6 @@
     .rocket-lucky { position: absolute; left: 50%; transform: translate(-50%, 50%); font-size: 18px; animation: pulse 1.5s infinite; }
     .rocket-trail { position: absolute; left: 50%; bottom: 0; width: 3px; background: repeating-linear-gradient(180deg, rgba(255,255,255,0.35) 0 6px, transparent 6px 12px); transform: translateX(-50%); border-radius: 2px; }
 
-    /* ===== 🧱 레고 성 테마: 벽돌이 어긋나게 쌓이며 성벽처럼 올라갑니다 ===== */
     .lego-wall { display: flex; flex-direction: column-reverse; gap: 4px; width: 100%; height: 100%; padding: 4px 8px; justify-content: flex-start; }
     .lego-row { display: flex; gap: 4px; justify-content: center; }
     .lego-row.offset { padding: 0 16px; }
@@ -83,7 +79,6 @@
     .lego-brick2::before { left: 22%; }
     .lego-brick2::after { right: 22%; }
 
-    /* ===== 🌳 무럭무럭 나무 테마: 줄기가 자라고 열매가 하나씩 열립니다 ===== */
     .tree-scene { position: absolute; inset: 0; }
     .tree-ground { position: absolute; bottom: 0; left: 0; right: 0; height: 16px; background: linear-gradient(180deg,#86efac,#4ade80); border-radius: 0 0 1.25rem 1.25rem; }
     .tree-trunk { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); width: 16px; background: linear-gradient(180deg,#a16207,#78350f); border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(.34,1.56,.64,1); }
@@ -91,14 +86,12 @@
     .tree-fruit { position: absolute; font-size: 1.05rem; transform: translate(-50%, -50%); }
     .tree-fruit.lucky { font-size: 1.3rem; animation: pulse 1.5s infinite; }
 
-    /* ===== 🎈 열기구 여행 테마: 낮 하늘을 배경으로 열기구가 목표(무지개)를 향해 떠오릅니다 ===== */
     .balloon-sky { position: absolute; inset: 0; background: linear-gradient(180deg, #7dd3fc, #bae6fd 55%, #e0f2fe); border-radius: 20px; overflow: hidden; box-shadow: inset 0 4px 14px rgba(0,0,0,0.08); }
     .balloon-cloud-mark { position: absolute; font-size: 15px; opacity: 0.9; }
     .balloon-current { position: absolute; left: 50%; bottom: 0; transform: translate(-50%, 40%); font-size: 34px; transition: bottom 0.8s cubic-bezier(.34,1.56,.64,1); filter: drop-shadow(0 6px 6px rgba(0,0,0,0.25)); }
     .balloon-goal { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 28px; }
     .balloon-lucky { position: absolute; left: 50%; transform: translate(-50%, 50%); font-size: 18px; animation: pulse 1.5s infinite; }
 
-    /* ===== 🐠 우리 집 어항 테마: 도장을 찍을 때마다 물고기가 한 마리씩 헤엄쳐 들어옵니다 ===== */
     .fishtank-scene { position: absolute; inset: 0; background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 45%, #0284c7 100%); border-radius: 20px; overflow: hidden; box-shadow: inset 0 4px 14px rgba(0,0,0,0.15); }
     .fishtank-bubble { position: absolute; font-size: 11px; opacity: 0.65; }
     .fishtank-fish { position: absolute; font-size: 1.6rem; transform: translate(-50%, -50%); transition: opacity 0.4s; }
@@ -106,26 +99,22 @@
     .fishtank-plant { position: absolute; bottom: 10px; font-size: 1.5rem; }
     .fishtank-sand { position: absolute; bottom: 0; left: 0; right: 0; height: 16px; background: linear-gradient(180deg, #fde68a, #f59e0b); border-radius: 0 0 20px 20px; }
 
-    /* ===== 🎂 케이크 조각 모으기 테마: 도장 찍을 때마다 케이크 한 조각이 채워집니다 ===== */
     .cake-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
     .cake-plate { position: relative; width: 78%; max-width: 250px; aspect-ratio: 1 / 1; border-radius: 50%; box-shadow: 0 10px 26px rgba(0,0,0,0.18), inset 0 0 0 6px #fff; }
     .cake-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 50%; width: 32%; height: 32%; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
     .cake-lucky-mark { position: absolute; font-size: 1.3rem; transform: translate(-50%,-50%); animation: pulse 1.5s infinite; }
 
-    /* ===== 🎲 보드게임 말판 테마: 뱀처럼 구불구불한 길을 따라 말이 한 칸씩 전진합니다 ===== */
     .board-path { display: grid; gap: 6px; width: 100%; height: 100%; align-content: start; }
     .board-cell { background: #fef9c3; border: 2px solid #fde68a; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #a16207; font-size: 1rem; height: 46px; }
     .board-cell.filled { background: #fbbf24; color: #fff; border-color: #f59e0b; box-shadow: 0 3px 8px rgba(245,158,11,0.35); }
     .board-cell.token { box-shadow: 0 0 0 3px #f59e0b, 0 4px 10px rgba(245,158,11,0.45); animation: pulse 1.2s infinite; font-size: 1.3rem; }
     .board-cell.lucky { border-color: #fbbf24; box-shadow: 0 0 0 3px #fde68a; animation: pulse 1.5s infinite; }
 
-    /* ===== 🌌 별자리 만들기 테마: 도장 찍을 때마다 별이 켜지고 선으로 이어져 별자리가 완성됩니다 ===== */
     .constellation-sky { position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, #1e293b, #0f172a 70%); border-radius: 20px; overflow: hidden; }
     .constellation-star { position: absolute; font-size: 1.3rem; transform: translate(-50%, -50%); animation: pulse 2.2s infinite; }
     .constellation-star.lucky { font-size: 1.6rem; }
     .constellation-placeholder { position: absolute; width: 6px; height: 6px; border: 1px dashed rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%); }
 
-    /* ===== 🐾 발자국 산책로 테마: 발자국을 따라 집(목표)까지 걸어갑니다 ===== */
     .footprint-path { position: absolute; inset: 0; background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%); border-radius: 20px; overflow: hidden; }
     .footprint-mark { position: absolute; font-size: 1.3rem; transform: translate(-50%, -50%); opacity: 0.95; }
     .footprint-mark.empty { opacity: 0.25; filter: grayscale(70%); }
@@ -151,7 +140,6 @@
     #rouletteCanvas { width: 100%; height: 100%; transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1); }
     .roulette-pointer { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 30px solid #ef4444; z-index: 10; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));}
 
-    /* 🚀 동기화 상태 인디케이터 */
     #syncIndicator { position: fixed; top: 10px; left: 50%; transform: translateX(-50%) translateY(-60px); background: #1e293b; color: white; padding: 6px 16px; border-radius: 20px; font-size: 11px; font-weight: 900; z-index: 300; transition: transform 0.25s, background 0.25s; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
     #syncIndicator.show { transform: translateX(-50%) translateY(0); }
     #syncIndicator.error { background: #dc2626; }
@@ -175,7 +163,6 @@
 
   <audio id="soundFanfare" src="https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" preload="auto"></audio>
 
-  <!-- 🚀 캡처용 카드: 화면 밖(-9999px)에 렌더링해서 html2canvas로 캡처만 하고 사용자에겐 안 보이게 함 -->
   <div id="shareCardContainer" style="position:fixed; left:-9999px; top:0; z-index:-1;"></div>
 
   <div id="syncIndicator"><span class="dot"></span><span id="syncIndicatorText">동기화 중...</span></div>
@@ -460,16 +447,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
   <script>
-    // 🔥 =====================================================================
-    // Firebase 설정: 아래 값을 본인의 Firebase 프로젝트 설정값으로 반드시 바꿔주세요.
-    // (Firebase 콘솔 → 프로젝트 설정 → 일반 → 내 앱 → SDK 설정 및 구성 에서 확인)
+    // 🔥 Firebase 설정값 (praise-sticker-756b4 프로젝트)
     const firebaseConfig = {
-      apiKey: "여기에_API_KEY를_입력하세요",
-      authDomain: "여기에_프로젝트ID.firebaseapp.com",
-      projectId: "여기에_프로젝트ID를_입력하세요",
-      storageBucket: "여기에_프로젝트ID.appspot.com",
-      messagingSenderId: "여기에_발신자ID를_입력하세요",
-      appId: "여기에_앱ID를_입력하세요"
+      apiKey: "AIzaSyAW-ItTRaZj4fWs57g_vpF-FGWgsKIEpj8",
+      authDomain: "praise-sticker-756b4.firebaseapp.com",
+      projectId: "praise-sticker-756b4",
+      storageBucket: "praise-sticker-756b4.firebasestorage.app",
+      messagingSenderId: "271275758860",
+      appId: "1:271275758860:web:4c1c430cb1c9329426e529"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
@@ -487,13 +472,12 @@
       return __fbReady;
     }
 
-    // 날짜 포맷 헬퍼 (기존 구글시트 버전과 동일한 표시 형식 유지)
-    function fmtShort(iso) { // MM/dd HH:mm (칭찬 기록용)
+    function fmtShort(iso) {
       const d = new Date(iso);
       const p = n => String(n).padStart(2, '0');
       return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
     }
-    function fmtFull(iso) { // yyyy-MM-dd HH:mm (보관함/소원용)
+    function fmtFull(iso) {
       const d = new Date(iso);
       const p = n => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
@@ -523,7 +507,6 @@
       return snap.data();
     }
 
-    // ===== 🔥 인증 =====
     async function authenticate(password, role) {
       await ensureAuth();
       const state = await getStateDoc();
@@ -541,7 +524,6 @@
       return true;
     }
 
-    // ===== 🔥 데이터 조회 =====
     async function getAppData(targetRound, role) {
       await ensureAuth();
       const isParent = (role === 'parent');
@@ -567,7 +549,7 @@
         const l = d.data();
         logEntries.push({ id: d.id, ...l, ts: new Date(l.date).getTime() });
       });
-      logEntries.sort((a,b) => a.ts - b.ts); // 오래된 순으로 정렬 (runningTotal 계산용)
+      logEntries.sort((a,b) => a.ts - b.ts);
       let logs = [];
       logEntries.forEach(l => {
         const score = Number(l.score);
@@ -604,7 +586,6 @@
       };
     }
 
-    // ===== 🔥 도장/보상 =====
     async function grantRewardIfEligible(round) {
       const boardRef = db.collection('boards').doc(String(round));
       const boardSnap = await boardRef.get();
@@ -632,7 +613,7 @@
       let curScore = 0;
       const roundLogs = [];
       logsSnap.forEach(d => { const l = d.data(); curScore += Number(l.score); roundLogs.push(l); });
-      roundLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // 오래된 순 정렬 (스트릭 계산용)
+      roundLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       if (score < 0 && curScore <= 0) return { data: await getAppData(round, role), rowsAdded: [] };
 
@@ -714,7 +695,6 @@
       return getAppData(round, role);
     }
 
-    // ===== 🔥 소원수리함 =====
     async function addWish(round, wishText) {
       await ensureAuth();
       const recentSnap = await db.collection('wishes').where('round','==',round).get();
@@ -740,14 +720,12 @@
       return getAppData(round, role);
     }
 
-    // ===== 🔥 스페셜 미션 =====
     async function setDailyBuff(round, buffText, role) {
       await ensureAuth();
       await db.collection('meta').doc('state').update({ dailyBuff: buffText || '' });
       return getAppData(round, role);
     }
 
-    // ===== 🔥 보관함 =====
     async function useItemSplit(itemId, childName, useAmount, maxAmount) {
       await ensureAuth();
       const ref = db.collection('items').doc(itemId);
@@ -779,7 +757,6 @@
       return getAppData(null, 'child');
     }
 
-    // ===== 🔥 럭키박스/판 설정 =====
     async function updateLuckyBox(round, step, text, role) {
       await ensureAuth();
       await db.collection('boards').doc(String(round)).update({ luckyStep: step, luckyText: text });
@@ -803,7 +780,7 @@
         if (b.status === '진행중' || b.status === '완료') toClose.push(b.round);
       });
       for (const r of toClose) {
-        await grantRewardIfEligible(r); // 놓친 보상 있으면 먼저 지급
+        await grantRewardIfEligible(r);
         await db.collection('boards').doc(String(r)).update({ status: '보상 수령 완료' });
       }
       const newRound = maxRound + 1;
@@ -822,7 +799,6 @@
       return getAppData(round, role);
     }
 
-    // ===== 🔥 사유 관리 =====
     async function addNewReasonToData(type, newReason, role, count) {
       await ensureAuth();
       const state = await getStateDoc();
@@ -848,10 +824,7 @@
       return getAppData(null, role);
     }
 
-    // ===== 🔥 기타 =====
     async function sendStampRequest(reason, detail, childName) {
-      // ℹ️ 깃허브 버전은 별도 서버가 없어 이메일 발송은 지원하지 않아요.
-      // (필요하면 나중에 EmailJS 같은 외부 이메일 서비스와 연동해 추가할 수 있어요)
       return true;
     }
 
@@ -875,9 +848,6 @@
       return { stats };
     }
 
-    // ===== 🔥 google.script.run 호환 레이어 =====
-    // 기존 코드 전체(수백 곳의 google.script.run.withSuccessHandler...) 를 하나도 안 바꾸고
-    // 그대로 재사용하기 위해, 실제로는 위의 Firestore 함수들을 호출하는 가짜 google.script.run을 만듭니다.
     const __firestoreApi = {
       authenticate, changeAppPassword, getAppData, addStampRecord, recoverLastPenalty,
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
@@ -911,7 +881,6 @@
     }
     window.google = { script: { run: undefined } };
     Object.defineProperty(window.google.script, 'run', { get() { return __makeRunner(); } });
-    // ===================================================================== 🔥
 
     let app = {};
 
@@ -928,12 +897,9 @@
     let currentRouletteTicketId = null;
     const ROULETTE_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
-    // 🚀 보드 캐시 (같은 세션에서 방문한 회차는 서버 재조회 없이 즉시 전환)
-    let boardCache = {}; // { round: appData }
+    let boardCache = {};
     let syncHideTimer = null;
 
-    // 🔒 연타(중복 클릭) 방지용 플래그 모음
-    // 버튼을 누르는 즉시 true로 잠그고, 서버 응답(성공/실패)이 오면 다시 false로 풀어줍니다.
     let isChangingPassword = false;
     let isUndoingStamp = false;
     let isAddingReason = false;
@@ -945,25 +911,17 @@
     let isChangingBoard = false;
     let processingWishIds = new Set();
 
-    // 🖐️ 도장 찍기 전용 대기열: 서버 저장(3~4초)을 다 기다리지 않고
-    // 1초의 '연타 방지 쿨다운'만 지나면 다음 도장을 또 찍을 수 있습니다.
-    // 각 도장 요청은 큐에 쌓여 순서대로(한 번에 하나씩) 구글시트에 저장됩니다.
     let stampQueue = [];
-    let isSendingStamp = false; // 현재 서버로 전송 중인 요청이 있는지
-    let isStampCoolingDown = false; // 버튼 연타 방지용 1초 쿨다운
+    let isSendingStamp = false;
+    let isStampCoolingDown = false;
     let stampLocalIdSeq = 0;
 
-    // 🐛 버그 수정: 모바일에서 입력칸을 터치하면 가상 키보드가 올라오며 화면이 리레이아웃되고,
-    // 그 과정에서 click 이벤트의 target이 엉뚱하게 모달 배경으로 잡혀 모달이 갑자기 닫히는 문제가 있었습니다.
-    // 그래서 "터치가 실제로 시작된 지점"을 별도로 기억해뒀다가, 시작 지점과 클릭 지점이 둘 다
-    // 배경일 때만 닫히도록 바꿨습니다 (입력칸에서 시작된 터치는 절대 모달을 닫지 않음).
     let modalPointerDownTarget = null;
     document.addEventListener('mousedown', e => { modalPointerDownTarget = e.target; }, true);
     document.addEventListener('touchstart', e => { modalPointerDownTarget = e.target; }, true);
 
     function vibrate(ms = 20) { if(navigator.vibrate) navigator.vibrate(ms); }
 
-    // 🚀 상단 동기화 인디케이터 제어
     function showSyncIndicator(text) {
       clearTimeout(syncHideTimer);
       const el = document.getElementById('syncIndicator');
@@ -984,7 +942,6 @@
       syncHideTimer = setTimeout(() => { el.classList.remove('show'); }, 2500);
     }
 
-    // 🚀 공유 카드 생성 + 카카오톡 등으로 공유하기
     function escapeHtml(str) {
       const div = document.createElement('div');
       div.innerText = (str === null || str === undefined) ? '' : String(str);
@@ -1039,8 +996,6 @@
       const container = document.getElementById('shareCardContainer');
       container.innerHTML = buildShareCardHTML();
       showSyncIndicator('공유 이미지 만드는 중...');
-
-      // 폰트/레이아웃이 자리잡을 시간을 살짝 준 뒤 캡처
       setTimeout(() => {
         html2canvas(document.getElementById('shareCardInner'), { backgroundColor: '#ffffff', scale: 2, useCORS: true })
           .then(canvas => {
@@ -1059,7 +1014,7 @@
     function shareOrDownloadImage(blob) {
       const fileName = `칭찬스티커_${app.currentBoard.round}회차.png`;
       let file = null;
-      try { file = new File([blob], fileName, { type: 'image/png' }); } catch(e) { /* 구형 브라우저 대비 */ }
+      try { file = new File([blob], fileName, { type: 'image/png' }); } catch(e) {}
 
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
         navigator.share({
@@ -1070,7 +1025,6 @@
           if (err && err.name !== 'AbortError') showToast('공유가 취소되었어요.');
         });
       } else {
-        // Web Share API를 못 쓰는 환경(구형 브라우저 등)에서는 이미지를 다운로드해서 수동 첨부하도록 안내
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = fileName;
@@ -1080,9 +1034,6 @@
       }
     }
 
-
-    // 🩺 진단용 임시 코드: 페이지가 열리자마자 아무 데이터도 안 건드리는 가장 가벼운
-    // 함수(pingServer)를 호출해서, 서버 응답 자체가 오는지부터 화면 상단에 계속 보여줍니다.
     window.onload = () => {
       const savedRole = localStorage.getItem('stickerRole');
       const savedPw = localStorage.getItem('stickerPw');
@@ -1093,9 +1044,6 @@
         attemptLogin('parent');
       }
     };
-
-    // 🩺 진단용 임시 함수: 시트 데이터를 전혀 건드리지 않는 가장 가벼운 함수로
-    // 서버 왕복 자체가 되는지부터 확인합니다.
 
     let loginRetryCount = 0;
 
@@ -1119,9 +1067,6 @@
 
       google.script.run
         .withSuccessHandler(res => {
-           // 🌐 서버는 응답했지만 내용이 비어있거나(res=null) 에러 형태인 경우 =
-           // 대부분 모바일 네트워크가 불안정해서 응답이 온전히 전달되지 못한 경우입니다.
-           // 화면을 깨뜨리지 않고, 로그인 화면에서 자동으로 재시도합니다.
            if (!res || res.__error) {
              handleLoginRetry(role, res);
              return;
@@ -1130,7 +1075,7 @@
            try {
              localStorage.setItem('stickerRole', role);
              if (role === 'parent') localStorage.setItem('stickerPw', pw); 
-           } catch (e) { /* localStorage를 못 쓰는 환경이어도 로그인 자체는 계속 진행 */ }
+           } catch (e) {}
 
            currentRole = role;
            document.getElementById('loginScreen').classList.add('hidden');
@@ -1146,8 +1091,6 @@
         .authenticate(pw, role);
     }
 
-    // 📶 네트워크가 불안정해서 응답을 못 받았을 때: 화면은 로그인 화면에 그대로 두고
-    // 최대 2번까지 자동으로 다시 시도합니다. 그래도 안 되면 사용자에게 안내합니다.
     function handleLoginRetry(role, res, err) {
       const pBtn = document.getElementById('btnParentLogin');
       const cBtn = document.getElementById('btnChildLogin');
@@ -1170,7 +1113,7 @@
     }
 
     function changePassword() {
-      if (isChangingPassword) return; // 🔒 연타 방지
+      if (isChangingPassword) return;
       vibrate();
       const oldPw = document.getElementById('oldPwInput').value;
       const newPw = document.getElementById('newPwInput').value;
@@ -1222,7 +1165,6 @@
       }
     }
 
-    // 데이터를 불러오지 못했을 때 깔끔한 안내 + 재시도 버튼을 보여줍니다.
     function showLoadErrorScreen(message) {
       const v = document.getElementById('visualizer');
       if (v) {
@@ -1261,7 +1203,6 @@
         document.getElementById('streakCount').innerText = app.currentStreak;
       } else { streak.classList.add('hidden'); }
 
-      // 오늘의 스페셜 미션 배너 활성화 감지 로직
       const banner = document.getElementById('specialPraiseBanner');
       if(app.dailyBuff) {
         banner.classList.remove('hidden');
@@ -1280,7 +1221,6 @@
       content.innerHTML = `<p class="text-center text-slate-400 py-10 font-bold">통계를 불러오는 중...</p>`;
       openModal('reportModal');
 
-      // 🚀 통계(요일별/사유별)는 자주 안 쓰이니, 리포트를 열 때만 서버에 요청합니다.
       google.script.run
         .withSuccessHandler(res => {
           if (!res || res.__error) {
@@ -1428,8 +1368,6 @@
         v.innerHTML = `<img src="${imgUrl}" class="absolute inset-0 w-full h-full object-cover rounded-xl"><div class="puzzle-grid">${pieces}</div>`;
       }
 
-      // 🎁 목표 달성/보상 지급은 이제 서버에서 자동으로 처리되므로, "보상 받기" 버튼 없이
-      // 완료 상태(보상 수령 완료)일 때 안내 문구만 보여줍니다.
       if (app.currentBoard.status === '보상 수령 완료') {
         v.innerHTML += `<div class="claim-overlay">
           <h3 class="text-2xl font-black text-indigo-600 mb-2">GOAL!! 🏆</h3>
@@ -1438,11 +1376,10 @@
       }
     }
 
-    // 🌡️ 온도계 테마: 목표 개수만큼 눈금을 그리고, 실제 온도계처럼 수은주가 연속적으로 차오릅니다.
     function renderThermometerTheme(cur, target, lucky) {
       const percent = Math.max(0, Math.min(100, (cur / target) * 100));
       let ticksHtml = '';
-      const majorEvery = Math.max(1, Math.ceil(target / 10)); // 눈금이 너무 빽빽하지 않도록 10개 안팎으로 조절
+      const majorEvery = Math.max(1, Math.ceil(target / 10));
       for (let i = 1; i < target; i++) {
         const p = (i / target) * 100;
         const isMajor = (i % majorEvery === 0);
@@ -1467,7 +1404,6 @@
       `;
     }
 
-    // 🌸 칭찬의 꽃 테마: 하늘과 잔디가 있는 정원에 도장을 찍을 때마다 꽃이 팡! 하고 피어납니다.
     function renderFlowerTheme(cur, target, lucky) {
       const species = ['🌸', '🌼', '🌻', '🌺'];
       let html = '<div class="garden-cloud" style="top:8%; left:12%;">☁️</div><div class="garden-cloud" style="top:16%; right:14%;">☁️</div>';
@@ -1484,7 +1420,6 @@
       return `<div class="garden-bed"><div class="garden-flowers">${html}</div></div>`;
     }
 
-    // 🚀 꿈의 로켓 테마: 밤하늘을 배경으로 로켓이 목표(달)를 향해 점점 높이 날아갑니다.
     function renderRocketTheme(cur, target, lucky) {
       const curPercent = Math.max(0, Math.min(100, (cur / target) * 100));
       let starsHtml = '';
@@ -1511,7 +1446,6 @@
       `;
     }
 
-    // 🧱 레고 성 테마: 벽돌이 한 줄씩 어긋나게 쌓이며 진짜 성벽처럼 올라갑니다.
     function renderLegoTheme(cur, target, lucky) {
       const cols = target > 30 ? 6 : 5;
       const colors = ['#3b82f6', '#ef4444', '#facc15', '#22c55e', '#a855f7'];
@@ -1535,12 +1469,11 @@
       return `<div class="lego-wall">${rowsHtml}</div>`;
     }
 
-    // 🌳 무럭무럭 나무 테마: 도장 개수만큼 줄기와 나뭇잎이 자라고, 열매가 하나씩 열립니다.
     const TREE_FRUIT_SPOTS = [[30,32],[68,28],[46,52],[20,58],[78,50],[52,20],[34,72],[64,70],[42,38],[58,40]];
     function renderTreeTheme(cur, target, lucky) {
       const percent = Math.max(0, Math.min(100, (cur / target) * 100));
-      const trunkHeight = 24 + percent * 1.4; // px
-      const canopySize = 90 + percent * 1.5; // px
+      const trunkHeight = 24 + percent * 1.4;
+      const canopySize = 90 + percent * 1.5;
       const canopyBottom = 16 + trunkHeight - canopySize * 0.32;
 
       let fruitsHtml = '';
@@ -1565,7 +1498,6 @@
       `;
     }
 
-    // 🎈 열기구 여행 테마: 낮 하늘 위로 열기구가 점점 높이 떠오르고, 지나온 자리엔 구름이 남습니다.
     function renderBalloonTheme(cur, target, lucky) {
       const curPercent = Math.max(0, Math.min(100, (cur / target) * 100));
       let cloudsHtml = '';
@@ -1591,7 +1523,6 @@
       `;
     }
 
-    // 🐠 우리 집 어항 테마: 도장을 찍을 때마다 물고기가 한 마리씩 헤엄쳐 들어옵니다.
     const FISHTANK_SPOTS = [[20,25],[70,20],[35,45],[80,50],[15,60],[55,30],[45,65],[85,72],[25,75],[65,55],[10,40],[60,15]];
     const FISH_SPECIES = ['🐠','🐟','🐡'];
     function renderFishtankTheme(cur, target, lucky) {
@@ -1620,7 +1551,6 @@
       `;
     }
 
-    // 🎂 케이크 조각 모으기 테마: 도장을 찍을 때마다 케이크가 한 조각씩 채워집니다.
     function renderCakeTheme(cur, target, lucky) {
       const sliceDeg = 360 / target;
       let stops = [];
@@ -1637,7 +1567,7 @@
 
       let luckyMarkHtml = '';
       if (lucky) {
-        const midDeg = (lucky - 0.5) * sliceDeg - 90; // 12시 방향을 0도로 맞춤
+        const midDeg = (lucky - 0.5) * sliceDeg - 90;
         const rad = midDeg * Math.PI / 180;
         const x = 50 + Math.cos(rad) * 34;
         const y = 50 + Math.sin(rad) * 34;
@@ -1656,7 +1586,6 @@
       `;
     }
 
-    // 🎲 보드게임 말판 테마: 뱀처럼 구불구불한 길을 따라 말이 한 칸씩 전진합니다.
     function renderBoardGameTheme(cur, target, lucky) {
       const cols = target > 30 ? 6 : 5;
       const rows = Math.ceil(target / cols);
@@ -1667,7 +1596,7 @@
           const linear = r * cols + c + 1;
           if (linear <= target) rowIndices.push(linear);
         }
-        if (r % 2 === 1) rowIndices.reverse(); // 짝수 줄은 방향을 반대로 → 뱀처럼 구불구불한 경로
+        if (r % 2 === 1) rowIndices.reverse();
         rowIndices.forEach(i => {
           const isLucky = (i == lucky);
           const filled = i <= cur;
@@ -1681,7 +1610,6 @@
       return `<div class="board-path" style="grid-template-columns: repeat(${cols}, 1fr);">${cellsHtml}</div>`;
     }
 
-    // 🌌 별자리 만들기 테마: 도장 찍을 때마다 별이 켜지고, 별과 별 사이가 선으로 이어져 별자리가 완성됩니다.
     const CONSTELLATION_SPOTS = [[15,72],[26,42],[40,58],[52,26],[64,46],[76,20],[86,48],[70,74],[54,80],[38,86],[26,92],[18,60]];
     function renderConstellationTheme(cur, target, lucky) {
       let starsHtml = '', dotsHtml = '';
@@ -1709,7 +1637,6 @@
       return `<div class="constellation-sky">${lineHtml}${dotsHtml}${starsHtml}${luckyHtml}</div>`;
     }
 
-    // 🐾 발자국 산책로 테마: 발자국을 따라 목적지(집)까지 걸어갑니다.
     function renderFootprintTheme(cur, target, lucky) {
       let html = `<div class="footprint-dest">🏡</div>`;
       for (let i = 1; i <= target; i++) {
@@ -1728,7 +1655,7 @@
     }
 
     function changeTheme() {
-      if (isChangingTheme) return; // 🔒 연타 방지
+      if (isChangingTheme) return;
       vibrate();
       const sel = document.getElementById('themeSelect').value;
       app.currentBoard.theme = sel;
@@ -1743,7 +1670,6 @@
       showToast("테마가 변경되었습니다.");
     }
 
-    // 📌 2번 만회 제어 구문 확장을 위해 분기 처리 개선
     function setMode(mode) {
       if(isProcessing) return;
       vibrate(30);
@@ -1765,21 +1691,15 @@
       } else if(mode === 'recover') {
         btn.className = 'w-full py-5 bg-amber-500 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2';
         submit.innerText = '마지막 차감 취소 및 도장 콤보 복구하기 (↩️)';
-        document.getElementById('btnNewReason').className = "hidden"; // 고정 옵션이므로 숨김
+        document.getElementById('btnNewReason').className = "hidden";
         select.innerHTML = `<option value="✨ 만회하기 성공!">실수를 멋지게 복구했습니다!</option>`;
       }
       currentMode = mode;
     }
 
-    // 🚀🚀🚀 핵심 개선: 낙관적 업데이트(Optimistic UI) + 대기열 처리
-    // 버튼을 누르는 즉시 화면에 스티커판을 먼저 반영합니다.
-    // '연타 방지'는 1초짜리 쿨다운으로만 걸어두고, 실제 구글시트 저장(3~4초)은
-    // 대기열(stampQueue)에 쌓아 백그라운드에서 순서대로 처리하므로
-    // 저장이 끝나기 전에도 1초 뒤엔 바로 다음 도장을 찍을 수 있습니다.
     function executeStamp() {
       if(currentMode === 'penalty' && app.currentScore <= 0) { showToast("이미 0개예요! 더 뺄 수 없어요 🙅"); return; }
 
-      // 📌 만회하기는 로직이 특수(과거 로그 수정)하므로 큐잉하지 않고 기존 방식(완전 대기) 유지
       if(currentMode === 'recover') {
         if(isProcessing) return;
         isProcessing = true;
@@ -1804,7 +1724,6 @@
         return;
       }
 
-      // 🖐️ 연타 방지: 1초 안에 또 누르면 무시 (실제 저장 완료를 기다리는 게 아니라 순수 클릭 방지용)
       if (isStampCoolingDown) return;
       isStampCoolingDown = true;
       const submitButtonEl = document.getElementById('submitBtn');
@@ -1814,10 +1733,8 @@
       vibrate(40);
       const reason = document.getElementById('reasonSelect').value;
       const detail = document.getElementById('detailInput').value;
-      // 🔢 사유별 기본 스티커 개수(없으면 1개)를 사용합니다.
       const baseCount = (app.praiseCounts && app.praiseCounts[reason]) ? app.praiseCounts[reason] : 1;
       let score = currentMode === 'praise' ? baseCount : -1;
-      // 🌟 오늘의 스페셜 미션과 일치하면 서버에서도 기본 개수+1로 처리되므로, 화면에도 미리 반영해 "점프" 현상 방지
       const isBuffMatch = (currentMode === 'praise' && app.dailyBuff && reason === app.dailyBuff);
       if (isBuffMatch) score = baseCount + 1;
 
@@ -1825,7 +1742,6 @@
       const prevScore = app.currentScore;
       const localId = 'stamp_' + (++stampLocalIdSeq);
 
-      // --- 화면에 즉시 반영 (낙관적 업데이트) ---
       const nowTs = Date.now();
       const optimisticLog = {
         date: new Date().toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false}).replace(/\. /g,'/').replace('.',''),
@@ -1844,21 +1760,18 @@
       document.getElementById('levelBar').style.width = `${(app.lifetimeScore % 50) * 2}%`;
       document.getElementById('detailInput').value = '';
 
-      // --- 대기열에 추가하고 백그라운드 처리 시작 ---
       stampQueue.push({ localId, round, reason, detail, score, executor: app.userName, role: currentRole, prevScore });
       processStampQueue();
     }
 
-    // 대기열에 쌓인 도장을 한 번에 하나씩 순서대로 서버에 저장합니다.
     function processStampQueue() {
       if (isSendingStamp || stampQueue.length === 0) return;
       isSendingStamp = true;
       const job = stampQueue.shift();
-      showSyncIndicator(stampQueue.length > 0 ? `구글시트에 저장 중... (대기 ${stampQueue.length}건)` : '구글시트에 저장 중...');
+      showSyncIndicator(stampQueue.length > 0 ? `저장 중... (대기 ${stampQueue.length}건)` : '저장 중...');
 
       google.script.run
         .withSuccessHandler(res => {
-          // 이 요청이 큐에 있는 동안 새로 찍힌(아직 서버로 안 간) 도장들은 그대로 화면에 살려둡니다.
           const stillPendingLogs = app.logs.filter(l => l.pending && l.localId !== job.localId);
           const pendingScoreSum = stillPendingLogs.reduce((s, l) => s + l.rawScore, 0);
           const pendingLifetimeSum = stillPendingLogs.reduce((s, l) => s + (l.rawScore > 0 ? l.rawScore : 0), 0);
@@ -1894,10 +1807,9 @@
           showUndoBar();
           hideSyncIndicator();
           isSendingStamp = false;
-          processStampQueue(); // 큐에 남은 다음 도장 이어서 처리
+          processStampQueue();
         })
         .withFailureHandler(err => {
-          // 이 도장만 롤백 (다른 대기 중인/이미 저장된 도장은 그대로 유지)
           const idx = app.logs.findIndex(l => l.pending && l.localId === job.localId);
           if (idx > -1) {
             const removed = app.logs.splice(idx, 1)[0];
@@ -1909,7 +1821,7 @@
           document.getElementById('levelBar').style.width = `${(app.lifetimeScore % 50) * 2}%`;
           showSyncError("저장 실패! 되돌렸어요: " + err.message);
           isSendingStamp = false;
-          processStampQueue(); // 이 건은 실패했어도 큐에 남은 다음 도장은 계속 진행
+          processStampQueue();
         })
         .addStampRecord(job.round, job.reason, job.detail, job.score, job.executor, job.role);
     }
@@ -1926,7 +1838,7 @@
       undoTimer = setTimeout(() => { bar.classList.remove('show'); }, 10000);
     }
     function cancelUndo() {
-      if (isUndoingStamp) return; // 🔒 연타 방지
+      if (isUndoingStamp) return;
       isUndoingStamp = true;
       vibrate();
       clearTimeout(undoTimer);
@@ -1947,7 +1859,7 @@
     function showToast(m) { vibrate(10); const t = document.getElementById('toast'); t.innerText = m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
 
     function promptAddReason() {
-      if (isAddingReason) return; // 🔒 연타 방지
+      if (isAddingReason) return;
       vibrate();
       const text = prompt(`새로운 사유를 입력하세요:`);
       if(text && text.trim()) {
@@ -1955,7 +1867,7 @@
         let count = 1;
         if (currentMode === 'praise') {
           const countInput = prompt(`"${val}"을(를) 칭찬할 때 기본으로 몇 개의 스티커를 줄까요?`, '1');
-          if (countInput === null) return; // 취소하면 등록도 취소
+          if (countInput === null) return;
           count = parseInt(countInput);
           if (isNaN(count) || count < 1) count = 1;
           app.praiseList.push(val);
@@ -2000,7 +1912,7 @@
 
     let isSavingReasonCount = false;
     function saveReasonCount(reason) {
-      if (isSavingReasonCount) return; // 🔒 연타 방지
+      if (isSavingReasonCount) return;
       const input = document.getElementById('reasonCount_' + encodeURIComponent(reason));
       let count = parseInt(input.value);
       if (isNaN(count) || count < 1) count = 1;
@@ -2031,7 +1943,7 @@
     }
 
     function openNewBoardUI() {
-      if (isCreatingBoard) return; // 🔒 연타 방지
+      if (isCreatingBoard) return;
       vibrate();
       const target = prompt('새 칭찬판의 목표 개수:', '30'); if(!target) return;
       const reward = prompt('이번 목표 달성 보상:', '보상 입력'); if(!reward) return;
@@ -2055,10 +1967,8 @@
       openModal('boardHistoryModal');
     }
 
-    // 🚀 회차 전환: 캐시에 있으면 서버 호출 없이 즉시 전환 (조회 체감속도 대폭 개선)
-    // 캐시가 없을 때만 서버에서 불러오고, 백그라운드로 최신 데이터를 다시 한번 조용히 갱신합니다.
     function changeBoard(round) {
-      if (isChangingBoard) return; // 🔒 연타 방지
+      if (isChangingBoard) return;
       vibrate();
       closeModal('boardHistoryModal');
       const key = String(round);
@@ -2067,7 +1977,6 @@
         app = JSON.parse(JSON.stringify(boardCache[key]));
         renderBoard();
         showToast(`${round}회차로 이동했습니다.`);
-        // 최신 상태로 조용히 백그라운드 갱신 (다른 기기에서 그 사이 기록이 추가됐을 수 있으므로)
         isChangingBoard = true;
         google.script.run
           .withSuccessHandler(res => {
@@ -2095,7 +2004,6 @@
         .getAppData(round, currentRole);
     }
 
-    // 🎰 "이름:비율" 텍스트를 [{name, ratio}] 형태로 파싱합니다. ratio가 없으면 null(자동배분).
     function parseLuckyBoxText(text) {
       return text.split('\n').map(s => s.trim()).filter(s => s !== '').map(line => {
         const idx = line.lastIndexOf(':');
@@ -2109,9 +2017,6 @@
       }).filter(p => p.name !== '');
     }
 
-    // [{name, ratio}] -> [{name, weight}] (weight는 합이 1이 되는 실제 당첨 확률)
-    // 규칙: 비율 전체 빈칸이면 1/N씩. 일부만 적혀있으면, 적힌 비율(%)만큼 배정하고
-    // 남은 확률(100-적힌 비율 합)을 빈칸끼리 똑같이 나눠 가집니다.
     function resolvePrizeWeights(prizes) {
       const specified = prizes.filter(p => p.ratio !== null && p.ratio !== undefined);
       const blank = prizes.filter(p => p.ratio === null || p.ratio === undefined);
@@ -2136,13 +2041,12 @@
       return total > 0 ? result.map(p => ({ name: p.name, weight: p.weight / total })) : result;
     }
 
-    // 저장된 luckyText(이전 형식: 이름 배열 / 새 형식: {name,ratio} 배열)를 [{name,ratio}]로 통일
     function normalizeLuckyText(text) {
       if (!text) return [];
       try {
         let arr = JSON.parse(text);
         if (!Array.isArray(arr) || arr.length === 0) return text ? [{ name: text, ratio: null }] : [];
-        if (typeof arr[0] === 'string') return arr.map(name => ({ name: name, ratio: null })); // 이전 형식 호환
+        if (typeof arr[0] === 'string') return arr.map(name => ({ name: name, ratio: null }));
         return arr.map(p => ({ name: p.name, ratio: (p.ratio === undefined ? null : p.ratio) }));
       } catch (e) {
         return [{ name: text, ratio: null }];
@@ -2175,7 +2079,7 @@
       vibrate();
       const step = document.getElementById('luckyStepSelect').value;
       const raw = document.getElementById('luckyBoxTextarea').value;
-      const prizes = parseLuckyBoxText(raw); // [{name, ratio}]
+      const prizes = parseLuckyBoxText(raw);
       if(!step || prizes.length === 0) { showToast("럭키박스 내용을 하나 이상 적어주세요!"); return; }
       const text = JSON.stringify(prizes);
       const btn = document.getElementById('btnSaveLucky');
@@ -2187,7 +2091,7 @@
     }
 
     function triggerReward() {
-      if (isClaimingReward) return; // 🔒 연타 방지
+      if (isClaimingReward) return;
       isClaimingReward = true;
       vibrate(100);
       document.getElementById('soundFanfare').play();
@@ -2303,7 +2207,7 @@
       const rawPrizes = normalizeLuckyText(app.currentBoard.luckyText).length > 0
         ? normalizeLuckyText(app.currentBoard.luckyText)
         : [{ name: '꽝', ratio: null }, { name: '다시 뽑기', ratio: null }];
-      roulettePrizes = resolvePrizeWeights(rawPrizes); // [{name, weight}]
+      roulettePrizes = resolvePrizeWeights(rawPrizes);
       drawRouletteWheel();
       const legend = document.getElementById('rouletteLegend');
       legend.innerHTML = roulettePrizes.map((p, i) => `
@@ -2356,10 +2260,8 @@
       canvas.style.transform = `rotate(${spinAngleStart}deg)`;
       setTimeout(() => {
         const actualDeg = spinAngleStart % 360;
-        // 포인터(12시 방향)가 가리키는, 회전 전 원래 각도(도) -> 라디안
         const normalizedDeg = (360 - actualDeg + 270) % 360;
         const targetRad = normalizedDeg * Math.PI / 180;
-        // 조각별 비율(가중치)에 맞춰 어느 조각인지 탐색
         let acc = 0;
         let prizeIndex = roulettePrizes.length - 1;
         for (let i = 0; i < roulettePrizes.length; i++) {
@@ -2380,7 +2282,6 @@
       }, spinTimeTotal);
     }
 
-    // 📌 3번 기능: 소원수리함 인터페이스 제어 모듈
     function openWishlistModal() {
       vibrate();
       document.getElementById('childWishInputArea').className = app.isParent ? 'hidden' : 'block space-y-2 bg-white p-4 rounded-2xl shadow-sm border';
@@ -2388,7 +2289,7 @@
       openModal('wishlistModal');
     }
     function submitWish() {
-      if (isSubmittingWish) return; // 🔒 연타 방지
+      if (isSubmittingWish) return;
       const txt = document.getElementById('wishInput').value.trim();
       if(!txt) { showToast("소원 내용을 채워주세요!"); return; }
       isSubmittingWish = true;
@@ -2409,11 +2310,10 @@
         .addWish(app.currentBoard.round, txt);
     }
 
-    // 소원 상태별 배지 색상 결정
     function getWishBadgeClass(status) {
       if (status === '대기 중') return 'bg-amber-100 text-amber-600';
       if (status === '소원 성취! ✨') return 'bg-emerald-100 text-emerald-600';
-      return 'bg-slate-200 text-slate-500'; // 다음에 들어줄게
+      return 'bg-slate-200 text-slate-500';
     }
 
     function renderWishes() {
@@ -2427,7 +2327,6 @@
         let bodyHtml = '';
 
         if (app.isParent && isPending) {
-          // 부모: 답변 전 소원 → 코멘트 입력 + 이뤄주기 / 다음에 들어줄게 버튼
           bodyHtml = `
             <textarea id="wishComment_${w.id}" class="w-full mt-2 p-2.5 bg-slate-50 rounded-xl text-xs font-bold outline-none border border-slate-100" rows="2" placeholder="아이에게 남길 코멘트를 적어주세요 (선택)"></textarea>
             <div class="flex gap-2 mt-2">
@@ -2437,7 +2336,6 @@
             <button onclick="handleWish('${w.id}', 'delete')" class="w-full mt-1 py-1 text-[10px] text-slate-300 font-bold">잘못 등록했어요 (삭제)</button>
           `;
         } else if (!isPending) {
-          // 이미 답변한 소원: 삭제하지 않고 코멘트와 함께 계속 기록으로 남김
           bodyHtml = w.comment
             ? `<p class="text-xs text-slate-500 mt-2 bg-slate-50 p-2.5 rounded-xl font-bold">💬 ${w.comment}</p>`
             : '';
@@ -2457,7 +2355,7 @@
     }
 
     function handleWish(id, action) {
-      if (processingWishIds.has(id)) return; // 🔒 연타 방지 (같은 소원에 대한 중복 요청 차단)
+      if (processingWishIds.has(id)) return;
 
       if (action === 'delete') {
         if(!confirm("이 소원 기록을 삭제하시겠습니까?")) return;
@@ -2493,7 +2391,6 @@
         .handleWishStatus(app.currentBoard.round, id, action, comment, currentRole);
     }
 
-    // 📌 4번 기능: 오늘의 스페셜 미션 인터페이스 제어 모듈
     function openSpecialPraiseModal() {
       vibrate();
       const sel = document.getElementById('buffSelect');
@@ -2502,7 +2399,7 @@
       openModal('specialPraiseModal');
     }
     function saveDailyBuff() {
-      if (isSavingBuff) return; // 🔒 연타 방지
+      if (isSavingBuff) return;
       let txt = document.getElementById('newBuffInput').value.trim();
       if(!txt) txt = document.getElementById('buffSelect').value;
       if(!txt) { showToast("사유를 선택하거나 입력해 주세요!"); return; }
@@ -2515,7 +2412,7 @@
         .setDailyBuff(app.currentBoard.round, txt, currentRole);
     }
     function clearDailyBuff() {
-      if (isSavingBuff) return; // 🔒 연타 방지
+      if (isSavingBuff) return;
       isSavingBuff = true;
       const saveBtn = document.getElementById('btnSaveBuff'), clearBtn = document.getElementById('btnClearBuff');
       saveBtn.disabled = true; clearBtn.disabled = true;
