@@ -145,6 +145,32 @@
     #syncIndicator.error { background: #dc2626; }
     #syncIndicator .dot { width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; animation: pulse 1s infinite; }
     #syncIndicator.error .dot { background: #fff; animation: none; }
+
+    /* ===== 📱📟💻 반응형: 태블릿/데스크톱에서는 글자와 주요 요소를 자연스럽게 키웁니다 ===== */
+    @media (min-width: 640px) {
+      body { font-size: 1.05rem; }
+      .text-\[9px\] { font-size: 12px !important; }
+      .text-\[10px\] { font-size: 13px !important; }
+      .text-\[11px\] { font-size: 14px !important; }
+      .text-xs { font-size: 0.9rem !important; }
+      .text-sm { font-size: 1rem !important; }
+      .theme-container { min-height: 520px; }
+      .rivals-cell { font-size: 1.35rem; height: 54px; }
+      .modal-content { max-width: 480px; }
+      #rouletteContainer { width: 300px; height: 300px; }
+    }
+    @media (min-width: 1024px) {
+      body { font-size: 1.12rem; }
+      .text-\[9px\] { font-size: 13px !important; }
+      .text-\[10px\] { font-size: 14px !important; }
+      .text-\[11px\] { font-size: 15px !important; }
+      .text-xs { font-size: 0.95rem !important; }
+      .text-sm { font-size: 1.05rem !important; }
+      .theme-container { min-height: 580px; }
+      .rivals-cell { font-size: 1.5rem; height: 60px; }
+      .modal-content { max-width: 560px; }
+      #rouletteContainer { width: 340px; height: 340px; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans pb-24">
@@ -167,11 +193,11 @@
 
   <div id="syncIndicator"><span class="dot"></span><span id="syncIndicatorText">동기화 중...</span></div>
 
-  <div id="mainApp" class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative hidden">
+  <div id="mainApp" class="max-w-md sm:max-w-xl md:max-w-2xl lg:max-w-3xl mx-auto bg-white sm:my-6 sm:rounded-3xl min-h-screen sm:min-h-0 shadow-2xl relative hidden">
     <div class="p-5 border-b bg-indigo-600 text-white sticky top-0 z-50">
       <div class="flex flex-col mb-3 gap-3">
         <h1 class="text-2xl font-black tracking-tighter">✨ 칭찬스티커</h1>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <span class="text-[10px] font-bold bg-white/20 px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/30 transition shadow-sm flex items-center" id="userTitle" onclick="openModal('levelModal')">...</span>
           <button onclick="openItemShop()" class="text-[10px] font-bold bg-pink-500/90 px-3 py-1.5 rounded-full cursor-pointer hover:bg-pink-50 transition shadow-sm active:scale-95 flex items-center">🎒 보관함</button>
           
@@ -232,6 +258,11 @@
           <div id="specialPraiseBanner" class="hidden mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center animate-pulse">
             <span class="text-[11px] font-black text-amber-600 tracking-wider">🌟 오늘의 스페셜 미션 (성공 시 도장 2개!) 🌟</span>
             <p id="specialPraiseText" class="text-sm font-black text-slate-700 mt-0.5">...</p>
+          </div>
+
+          <div id="requestBanner" class="hidden mt-3 bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center cursor-pointer active:scale-95 transition" onclick="openIncomingRequestsModal()">
+            <span class="text-[11px] font-black text-emerald-600 tracking-wider">🙋 새로운 칭찬 요청이 있어요!</span>
+            <p id="requestBannerText" class="text-sm font-black text-slate-700 mt-0.5">...</p>
           </div>
         </div>
       </div>
@@ -373,6 +404,10 @@
       </div>
       <button id="btnSaveEdit" onclick="saveBoardEdit()" class="w-full py-4 bg-indigo-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">판 설정 저장</button>
       <hr class="my-4 border-slate-200">
+      <h4 class="font-black text-lg text-slate-700">📤 데이터 내보내기</h4>
+      <p class="text-xs text-slate-400 mb-2 font-bold">지금까지의 모든 기록을 파일로 다운로드해서 중간중간 확인/백업할 수 있어요.</p>
+      <button onclick="exportAllData()" class="w-full py-3 bg-emerald-500 text-white font-black rounded-xl shadow-md active:scale-95 transition">📥 백업 파일 내려받기</button>
+      <hr class="my-4 border-slate-200">
       <h4 class="font-black text-lg text-slate-700">🔢 칭찬 사유별 스티커 개수</h4>
       <p class="text-xs text-slate-400 mb-2 font-bold">사유마다 한 번에 줄 스티커 개수를 다르게 정할 수 있어요.</p>
       <div id="reasonCountList" class="space-y-2 max-h-52 overflow-y-auto"></div>
@@ -433,6 +468,15 @@
       <select id="reqReasonSelect" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold" onchange="vibrate()"></select>
       <input type="text" id="reqDetailInput" placeholder="더 자랑하고 싶은 내용 (선택)" class="w-full p-4 bg-slate-100 rounded-2xl outline-none text-sm">
       <button id="btnSendReq" onclick="submitRequest()" class="w-full py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg mt-2 active:scale-95 transition">부모님께 요청 보내기</button>
+    </div>
+  </div>
+
+  <div id="incomingRequestsModal" class="modal" onclick="closeModalOnBg(event, 'incomingRequestsModal')">
+    <div class="modal-content overflow-hidden flex flex-col h-[70vh]">
+      <div class="p-5 bg-emerald-500 text-white font-black flex justify-between items-center shrink-0">
+        <h3>🙋 칭찬 요청함</h3><button onclick="closeModal('incomingRequestsModal')" class="text-xl">✕</button>
+      </div>
+      <ul id="incomingRequestsList" class="p-5 overflow-y-auto space-y-3 bg-slate-50 flex-1"></ul>
     </div>
   </div>
 
@@ -578,11 +622,19 @@
       (state.praiseReasons || []).forEach(r => praiseCounts[r.name] = r.count || 1);
       const hallOfFame = boards.filter(b => b.status === '완료' || b.status === '보상 수령 완료');
 
+      // 🙋 부모 화면에서만 대기 중인 칭찬 요청을 함께 불러옵니다.
+      let pendingRequests = [];
+      if (isParent) {
+        const reqSnap = await db.collection('requests').where('status','==','대기 중').get();
+        reqSnap.forEach(d => { const r = d.data(); pendingRequests.push({ id: d.id, reason: r.reason, detail: r.detail || '', childName: r.childName, date: fmtShort(r.date) }); });
+        pendingRequests.sort((a,b) => a.date < b.date ? -1 : 1);
+      }
+
       return {
         userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
         boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
         praiseCounts, parentEmails: [], bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
-        dailyBuff: state.dailyBuff || '', role, stats: null
+        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests
       };
     }
 
@@ -824,8 +876,19 @@
       return getAppData(null, role);
     }
 
+    // 📮 이메일 대신 Firestore에 요청을 저장해서, 부모님이 앱을 열면 배너로 바로 보이게 합니다.
     async function sendStampRequest(reason, detail, childName) {
+      await ensureAuth();
+      await db.collection('requests').add({
+        reason, detail: detail || '', childName, date: new Date().toISOString(), status: '대기 중'
+      });
       return true;
+    }
+
+    async function dismissRequest(requestId, role) {
+      await ensureAuth();
+      await db.collection('requests').doc(requestId).update({ status: '확인함' });
+      return getAppData(null, role);
     }
 
     async function getReportStats(role) {
@@ -848,12 +911,91 @@
       return { stats };
     }
 
+    // 📤 데이터 내보내기: Firestore 데이터를 원래 시트와 비슷한 형태의 CSV로 내려받습니다.
+    function csvEscape(s) {
+      s = String(s === undefined || s === null ? '' : s);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }
+
+    async function exportAllData() {
+      vibrate();
+      showSyncIndicator('내보내기 준비 중...');
+      try {
+        await ensureAuth();
+        const [boardsSnap, logsSnap, itemsSnap, wishesSnap, state] = await Promise.all([
+          db.collection('boards').orderBy('round').get(),
+          db.collection('logs').get(),
+          db.collection('items').get(),
+          db.collection('wishes').get(),
+          getStateDoc()
+        ]);
+
+        let out = '\ufeff'; // 엑셀에서 한글 깨짐 방지용 BOM
+
+        out += '## Sheet name: Logs\n';
+        out += '회차,날짜,사유,상세설명,실행자,점수\n';
+        const logRows = [];
+        logsSnap.forEach(d => logRows.push(d.data()));
+        logRows.sort((a, b) => new Date(a.date) - new Date(b.date));
+        logRows.forEach(l => {
+          out += [l.round, fmtFull(l.date), csvEscape(l.reason), csvEscape(l.detail || ''), l.executor, l.score].join(',') + '\n';
+        });
+
+        out += '\n## Sheet name: Items\n';
+        out += '회차,아이템명,획득일,상태,사용일,종류\n';
+        const itemRows = [];
+        itemsSnap.forEach(d => itemRows.push(d.data()));
+        itemRows.sort((a, b) => new Date(a.obtainedDate) - new Date(b.obtainedDate));
+        itemRows.forEach(it => {
+          out += [it.round, csvEscape(it.name), fmtFull(it.obtainedDate), it.status, it.usedDate ? fmtFull(it.usedDate) : '', it.type].join(',') + '\n';
+        });
+
+        out += '\n## Sheet name: Wishes\n';
+        out += '회차,소원내용,날짜,상태,부모코멘트\n';
+        const wishRows = [];
+        wishesSnap.forEach(d => wishRows.push(d.data()));
+        wishRows.sort((a, b) => new Date(a.date) - new Date(b.date));
+        wishRows.forEach(w => {
+          out += [w.round, csvEscape(w.text), fmtFull(w.date), w.status, csvEscape(w.comment || '')].join(',') + '\n';
+        });
+
+        out += '\n## Sheet name: Status\n';
+        out += '회차,목표개수,보상,테마,상태,럭키칸,럭키내용\n';
+        boardsSnap.forEach(d => {
+          const b = d.data();
+          out += [b.round, b.targetScore, csvEscape(b.reward), b.theme, b.status, b.luckyStep || '', csvEscape(b.luckyText || '')].join(',') + '\n';
+        });
+
+        out += '\n## Sheet name: Data\n';
+        out += '칭찬사유,기본개수\n';
+        (state.praiseReasons || []).forEach(r => { out += [csvEscape(r.name), r.count || 1].join(',') + '\n'; });
+        out += '\n차감사유\n';
+        (state.penaltyReasons || []).forEach(r => { out += csvEscape(r) + '\n'; });
+        out += `\n누적점수,${state.lifetimeScore || 0}\n`;
+        out += `내보낸시각,${fmtFull(new Date().toISOString())}\n`;
+
+        const blob = new Blob([out], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const fname = `칭찬스티커_백업_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.csv`;
+        const a = document.createElement('a');
+        a.href = url; a.download = fname;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+        hideSyncIndicator();
+        showToast('백업 파일이 다운로드됐어요! 📥');
+      } catch (e) {
+        showSyncError('내보내기 실패: ' + e.message);
+      }
+    }
+
     const __firestoreApi = {
       authenticate, changeAppPassword, getAppData, addStampRecord, recoverLastPenalty,
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonCount, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
-      getReportStats
+      getReportStats, dismissRequest
     };
 
     function __makeRunner() {
@@ -1211,8 +1353,77 @@
         banner.classList.add('hidden');
       }
 
+      // 🙋 대기 중인 칭찬 요청 배너 (부모 화면에서만)
+      const reqBanner = document.getElementById('requestBanner');
+      if (isParent && app.pendingRequests && app.pendingRequests.length > 0) {
+        reqBanner.classList.remove('hidden');
+        document.getElementById('requestBannerText').innerText =
+          app.pendingRequests.length === 1
+            ? `${app.pendingRequests[0].childName}: ${app.pendingRequests[0].reason}`
+            : `${app.pendingRequests.length}건 대기 중 · 눌러서 확인하기`;
+      } else {
+        reqBanner.classList.add('hidden');
+      }
+
       renderTheme();
       renderLogs();
+    }
+
+    // 🙋 요청함 모달 열기/렌더링
+    function openIncomingRequestsModal() {
+      vibrate();
+      renderIncomingRequests();
+      openModal('incomingRequestsModal');
+    }
+
+    function renderIncomingRequests() {
+      const list = document.getElementById('incomingRequestsList');
+      const reqs = app.pendingRequests || [];
+      if (reqs.length === 0) {
+        list.innerHTML = '<li class="text-center text-slate-400 py-6 text-sm font-bold">대기 중인 요청이 없어요.</li>';
+        return;
+      }
+      list.innerHTML = reqs.map(r => `
+        <li class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <p class="font-black text-slate-700">🙋 ${r.childName} · ${r.reason}</p>
+          ${r.detail ? `<p class="text-xs text-slate-500 mt-1 font-bold">↳ ${r.detail}</p>` : ''}
+          <p class="text-[10px] text-slate-400 font-bold mt-1">${r.date}</p>
+          <div class="flex gap-2 mt-3">
+            <button id="reqApprove_${r.id}" onclick="approveRequest('${r.id}', '${r.reason.replace(/'/g, "\\'")}', '${(r.detail||'').replace(/'/g, "\\'")}')" class="flex-1 py-2 bg-blue-500 text-white text-xs font-black rounded-lg active:scale-95 transition shadow-sm">도장 쾅! 찍어주기</button>
+            <button id="reqDismiss_${r.id}" onclick="dismissIncomingRequest('${r.id}')" class="flex-1 py-2 bg-slate-200 text-slate-500 text-xs font-black rounded-lg active:scale-95 transition">닫기</button>
+          </div>
+        </li>
+      `).join('');
+    }
+
+    let processingRequestIds = new Set();
+    function approveRequest(reqId, reason, detail) {
+      if (processingRequestIds.has(reqId)) return;
+      processingRequestIds.add(reqId);
+      vibrate();
+      const btn = document.getElementById('reqApprove_' + reqId);
+      if (btn) { btn.disabled = true; btn.innerText = "처리 중..."; }
+      const baseCount = (app.praiseCounts && app.praiseCounts[reason]) ? app.praiseCounts[reason] : 1;
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res.data;
+          google.script.run
+            .withSuccessHandler(res2 => { app = res2; renderBoard(); renderIncomingRequests(); showToast("도장 찍어주고 요청도 처리했어요! 🎉"); processingRequestIds.delete(reqId); })
+            .withFailureHandler(() => { processingRequestIds.delete(reqId); })
+            .dismissRequest(reqId, currentRole);
+        })
+        .withFailureHandler(err => { showToast("오류: " + err.message); processingRequestIds.delete(reqId); if(btn){btn.disabled=false; btn.innerText="도장 쾅! 찍어주기";} })
+        .addStampRecord(app.currentBoard.round, reason, detail, baseCount, app.userName, currentRole);
+    }
+
+    function dismissIncomingRequest(reqId) {
+      if (processingRequestIds.has(reqId)) return;
+      processingRequestIds.add(reqId);
+      vibrate();
+      google.script.run
+        .withSuccessHandler(res => { app = res; renderBoard(); renderIncomingRequests(); processingRequestIds.delete(reqId); })
+        .withFailureHandler(err => { showToast("오류: " + err.message); processingRequestIds.delete(reqId); })
+        .dismissRequest(reqId, currentRole);
     }
 
     function openReportModal() {
