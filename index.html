@@ -405,6 +405,10 @@
       </div>
       <button id="btnSaveEdit" onclick="saveBoardEdit()" class="w-full py-4 bg-indigo-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">판 설정 저장</button>
       <hr class="my-4 border-slate-200">
+      <h4 class="font-black text-lg text-slate-700">🔧 놓친 콤보 보너스 채우기</h4>
+      <p class="text-xs text-slate-400 mb-2 font-bold">사유별 개수 기능 도입 전/후로 5칸마다 나오는 보너스가 빠졌을 수 있어요. 눌러서 이번 회차 기록을 다시 확인해요.</p>
+      <button onclick="repairStreakBonusesUI()" class="w-full py-3 bg-orange-500 text-white font-black rounded-xl shadow-md active:scale-95 transition">🔍 이번 회차 보너스 확인/보정</button>
+      <hr class="my-4 border-slate-200">
       <h4 class="font-black text-lg text-slate-700">📤 데이터 내보내기</h4>
       <p class="text-xs text-slate-400 mb-2 font-bold">지금까지의 모든 기록을 파일로 다운로드해서 중간중간 확인/백업할 수 있어요.</p>
       <button onclick="exportAllData()" class="w-full py-3 bg-emerald-500 text-white font-black rounded-xl shadow-md active:scale-95 transition">📥 백업 파일 내려받기</button>
@@ -608,7 +612,7 @@
       logs.sort((a,b) => b.ts - a.ts);
       let bestPraise = Object.keys(countsByReason).length > 0 ? Object.keys(countsByReason).reduce((a,b) => countsByReason[a] > countsByReason[b] ? a : b) : "아직 없음";
       let currentStreak = 0;
-      for (const l of logs) { if (l.executor === '시스템') continue; if (l.rawScore > 0) currentStreak++; else if (l.rawScore < 0) break; }
+      for (const l of logs) { if (l.executor === '시스템') continue; if (l.rawScore > 0) currentStreak += l.rawScore; else if (l.rawScore < 0) break; }
 
       const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
       let items = [];
@@ -677,10 +681,13 @@
         finalReason = `🌟 [스페셜 미션 달성!] ${reason}`;
       }
 
-      let streak = 0;
+      // 🔥 연속 보너스는 "도장 찍은 횟수"가 아니라 "실제로 채워진 칸 수(점수 합)" 기준입니다.
+      // 예: 3칸짜리 사유를 2번 찍어도(6칸) 정확히 5칸 지점에서 보너스가 나옵니다.
+      let streakScoreBefore = 0;
       for (let i = roundLogs.length - 1; i >= 0; i--) {
         if (roundLogs[i].executor === '시스템') continue;
-        if (Number(roundLogs[i].score) > 0) streak++; else break;
+        const s = Number(roundLogs[i].score);
+        if (s > 0) streakScoreBefore += s; else break;
       }
 
       const now = new Date();
@@ -688,16 +695,20 @@
       const doc1 = await db.collection('logs').add({ round, date: now.toISOString(), reason: finalReason, detail: detail || '', executor, score: finalScore });
       addedIds.push(doc1.id);
 
-      let isBonusGiven = false;
+      let bonusCount = 0;
       if (score > 0) {
-        streak += 1;
-        if (streak > 0 && streak % 5 === 0) {
-          const now2 = new Date(now.getTime() + 1000);
-          const doc2 = await db.collection('logs').add({ round, date: now2.toISOString(), reason: `🔥 연속 칭찬 ${streak}회 보너스!`, detail:'대단해요!', executor:'시스템', score:1 });
-          addedIds.push(doc2.id);
-          isBonusGiven = true;
+        const streakScoreAfter = streakScoreBefore + finalScore;
+        let nextMilestone = (Math.floor(streakScoreBefore / 5) + 1) * 5;
+        let bonusTs = now.getTime() + 1000;
+        while (nextMilestone <= streakScoreAfter) {
+          const bonusDoc = await db.collection('logs').add({ round, date: new Date(bonusTs).toISOString(), reason: `🔥 연속 칭찬 ${nextMilestone}회 보너스!`, detail:'대단해요!', executor:'시스템', score:1 });
+          addedIds.push(bonusDoc.id);
+          bonusTs += 1000;
+          nextMilestone += 5;
+          bonusCount++;
         }
       }
+      const isBonusGiven = bonusCount > 0;
 
       if (finalScore > 0) {
         await db.collection('meta').doc('state').update({ lifetimeScore: firebase.firestore.FieldValue.increment(finalScore) });
@@ -706,7 +717,7 @@
       const boardSnap = await db.collection('boards').doc(String(round)).get();
       const board = boardSnap.data();
       const luckyStep = Number(board.luckyStep);
-      const totalAdded = finalScore + (isBonusGiven ? 1 : 0);
+      const totalAdded = finalScore + bonusCount;
       if (luckyStep > 0 && curScore < luckyStep && (curScore + totalAdded) >= luckyStep) {
         await db.collection('items').add({ round, name:'룰렛 추첨권', obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스' });
       }
@@ -850,6 +861,54 @@
       await ensureAuth();
       await grantRewardIfEligible(round);
       return getAppData(round, role);
+    }
+
+    // 🔧 놓친 연속 보너스 보정: 회차의 실제 로그를 처음부터 다시 훑어서
+    // (사유별 개수가 여러 칸이라 5의 배수를 건너뛴 경우 등으로) 빠진 5칸/10칸/... 보너스를 찾아 채워 넣습니다.
+    // 이미 정상적으로 있는 보너스는 건드리지 않고, 빠진 것만 추가합니다.
+    async function repairStreakBonuses(round) {
+      await ensureAuth();
+      const snap = await db.collection('logs').where('round','==',round).get();
+      let logs = [];
+      snap.forEach(d => logs.push({ id: d.id, ...d.data() }));
+      logs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // 1) 실제(사람이 찍은) 항목만 순서대로 재생해서 정답 마일스톤 목록 계산
+      let streakSum = 0;
+      const desiredMilestones = [];
+      logs.forEach(l => {
+        if (l.executor === '시스템') return;
+        const s = Number(l.score);
+        if (s > 0) {
+          const before = streakSum;
+          streakSum += s;
+          let next = (Math.floor(before / 5) + 1) * 5;
+          while (next <= streakSum) {
+            desiredMilestones.push({ milestone: next, afterDate: l.date });
+            next += 5;
+          }
+        } else {
+          streakSum = 0;
+        }
+      });
+
+      // 2) 이미 존재하는 보너스 마일스톤
+      const existingMilestones = new Set();
+      logs.forEach(l => {
+        if (l.executor === '시스템') {
+          const m = (l.reason || '').match(/연속 칭찬 (\d+)회 보너스/);
+          if (m) existingMilestones.add(Number(m[1]));
+        }
+      });
+
+      // 3) 빠진 것만 추가
+      const missing = desiredMilestones.filter(d => !existingMilestones.has(d.milestone));
+      for (const m of missing) {
+        const insertDate = new Date(new Date(m.afterDate).getTime() + 500).toISOString();
+        await db.collection('logs').add({ round, date: insertDate, reason: `🔥 연속 칭찬 ${m.milestone}회 보너스!`, detail: '대단해요! (보정)', executor: '시스템', score: 1 });
+        await db.collection('meta').doc('state').update({ lifetimeScore: firebase.firestore.FieldValue.increment(1) });
+      }
+      return missing.length;
     }
 
     async function addNewReasonToData(type, newReason, role, count) {
@@ -1963,7 +2022,7 @@
       };
       app.currentScore += score;
       app.logs.unshift(optimisticLog);
-      if (score > 0) app.currentStreak += 1; else app.currentStreak = 0;
+      if (score > 0) app.currentStreak += score; else app.currentStreak = 0;
       app.lifetimeScore += (score > 0 ? score : 0);
 
       renderBoard();
@@ -1987,7 +2046,7 @@
           const stillPendingLogs = app.logs.filter(l => l.pending && l.localId !== job.localId);
           const pendingScoreSum = stillPendingLogs.reduce((s, l) => s + l.rawScore, 0);
           const pendingLifetimeSum = stillPendingLogs.reduce((s, l) => s + (l.rawScore > 0 ? l.rawScore : 0), 0);
-          const pendingStreakCount = stillPendingLogs.filter(l => l.rawScore > 0).length;
+          const pendingStreakCount = stillPendingLogs.filter(l => l.rawScore > 0).reduce((s, l) => s + l.rawScore, 0);
 
           app = res.data;
           app.logs = [...stillPendingLogs, ...res.data.logs];
@@ -2139,6 +2198,27 @@
         })
         .withFailureHandler(err => { showToast("오류: " + err.message); isSavingReasonCount = false; })
         .updateReasonCount(reason, count, currentRole);
+    }
+
+    let isRepairingBonuses = false;
+    async function repairStreakBonusesUI() {
+      if (isRepairingBonuses) return;
+      vibrate();
+      isRepairingBonuses = true;
+      showSyncIndicator('보너스 확인 중...');
+      try {
+        const round = app.currentBoard.round;
+        const fixedCount = await repairStreakBonuses(round);
+        app = await getAppData(round, currentRole);
+        boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
+        renderBoard();
+        hideSyncIndicator();
+        if (fixedCount > 0) showToast(`놓친 보너스 ${fixedCount}개를 채워 넣었어요! 🎉`);
+        else showToast('놓친 보너스가 없어요. 이미 정상이에요! ✅');
+      } catch (e) {
+        showSyncError('오류: ' + e.message);
+      }
+      isRepairingBonuses = false;
     }
 
     function saveBoardEdit() {
