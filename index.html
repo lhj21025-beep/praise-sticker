@@ -41,11 +41,7 @@
     .thermo-tick.active { background: #ef4444; }
     .thermo-tick.lucky { animation: pulse 1.5s infinite; border: 1px solid #fbbf24;}
 
-    .puzzle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(40px, 1fr)); width: 100%; height: 100%; position: absolute; inset: 0; z-index: 10; gap: 1px;}
-    .puzzle-piece { background: #f8fafc; border: 1px dashed #cbd5e1; transition: opacity 0.8s, transform 0.8s; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;}
-    .puzzle-piece.active { opacity: 0; transform: scale(1.2) rotate(4deg); } 
-    .puzzle-piece.lucky { border: 2px solid #fbbf24; animation: pulse 1.5s infinite; }
-
+    
     .thermo-wrap { position: relative; width: 100%; height: 100%; }
     .thermo-label { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 900; color: #ef4444; letter-spacing: 0.02em; }
     .thermo-tube-outer { position: absolute; top: 42px; bottom: 76px; left: 50%; transform: translateX(-50%); width: 56px; background: linear-gradient(180deg, #f8fafc, #e2e8f0); border-radius: 30px; border: 4px solid #cbd5e1; overflow: visible; box-shadow: inset 0 4px 10px rgba(0,0,0,0.08); }
@@ -232,7 +228,6 @@
               <option value="flower">칭찬의 꽃</option>
               <option value="rocket">꿈의 로켓</option>
               <option value="lego">레고 성</option>
-              <option value="puzzle">비밀 퍼즐</option>
               <option value="tree">무럭무럭 나무</option>
               <option value="balloon">열기구 여행</option>
               <option value="fishtank">우리 집 어항</option>
@@ -405,27 +400,57 @@
       </div>
       <button id="btnSaveEdit" onclick="saveBoardEdit()" class="w-full py-4 bg-indigo-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">판 설정 저장</button>
       <hr class="my-4 border-slate-200">
-      <h4 class="font-black text-lg text-slate-700">🔧 놓친 콤보 보너스 채우기</h4>
-      <p class="text-xs text-slate-400 mb-2 font-bold">사유별 개수 기능 도입 전/후로 5칸마다 나오는 보너스가 빠졌을 수 있어요. 눌러서 이번 회차 기록을 다시 확인해요.</p>
-      <button onclick="repairStreakBonusesUI()" class="w-full py-3 bg-orange-500 text-white font-black rounded-xl shadow-md active:scale-95 transition">🔍 이번 회차 보너스 확인/보정</button>
-      <hr class="my-4 border-slate-200">
-      <h4 class="font-black text-lg text-slate-700">📤 데이터 내보내기</h4>
-      <p class="text-xs text-slate-400 mb-2 font-bold">지금까지의 모든 기록을 파일로 다운로드해서 중간중간 확인/백업할 수 있어요.</p>
-      <button onclick="exportAllData()" class="w-full py-3 bg-emerald-500 text-white font-black rounded-xl shadow-md active:scale-95 transition">📥 백업 파일 내려받기</button>
-      <hr class="my-4 border-slate-200">
-      <h4 class="font-black text-lg text-slate-700">🔢 칭찬 사유별 스티커 개수</h4>
-      <p class="text-xs text-slate-400 mb-2 font-bold">사유마다 한 번에 줄 스티커 개수를 다르게 정할 수 있어요.</p>
-      <div id="reasonCountList" class="space-y-2 max-h-52 overflow-y-auto"></div>
-      <hr class="my-4 border-slate-200">
       <h4 class="font-black text-lg text-slate-700">✨ 새로운 칭찬판 시작</h4>
       <p class="text-xs text-slate-400 mb-2 font-bold">현재 판을 끝내고 다음 회차로 넘어갑니다.</p>
       <button onclick="openNewBoardUI(); closeModal('editBoardModal');" class="w-full py-3 border-2 border-dashed border-indigo-200 text-indigo-500 font-black rounded-xl active:scale-95 transition">새로운 칭찬판 시작하기</button>
       <hr class="my-4 border-slate-200">
-      <h4 class="font-black text-lg text-slate-700">🔐 앱 비밀번호 변경</h4>
-      <input type="password" id="oldPwInput" placeholder="현재 비밀번호" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-2 font-bold tracking-widest text-center">
-      <input type="password" id="newPwInput" placeholder="새 비밀번호" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-2 font-bold tracking-widest text-center">
-      <input type="password" id="newPwConfirmInput" placeholder="새 비밀번호 확인" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-3 font-bold tracking-widest text-center">
-      <button id="btnChangePassword" onclick="changePassword()" class="w-full py-3 bg-slate-800 text-white font-black rounded-xl shadow-md active:scale-95 transition">비밀번호 변경하기</button>
+
+      <!-- 가끔 쓰는 기능들은 접어두고, 필요할 때만 펼쳐서 씁니다 -->
+      <details class="group border border-slate-200 rounded-xl px-3 py-2">
+        <summary class="font-black text-sm text-slate-700 cursor-pointer flex items-center justify-between select-none">
+          <span>🔢 칭찬 사유별 스티커 개수</span>
+          <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </summary>
+        <div class="pt-3">
+          <p class="text-xs text-slate-400 mb-2 font-bold">사유마다 한 번에 줄 스티커 개수를 다르게 정할 수 있어요.</p>
+          <div id="reasonCountList" class="space-y-2 max-h-52 overflow-y-auto"></div>
+        </div>
+      </details>
+
+      <details class="group border border-slate-200 rounded-xl px-3 py-2 mt-2">
+        <summary class="font-black text-sm text-slate-700 cursor-pointer flex items-center justify-between select-none">
+          <span>🔧 놓친 콤보 보너스 채우기</span>
+          <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </summary>
+        <div class="pt-3">
+          <p class="text-xs text-slate-400 mb-2 font-bold">사유별 개수 기능 도입 전/후로 5칸마다 나오는 보너스가 빠졌을 수 있어요. 눌러서 이번 회차 기록을 다시 확인해요.</p>
+          <button onclick="repairStreakBonusesUI()" class="w-full py-3 bg-orange-500 text-white font-black rounded-xl shadow-md active:scale-95 transition">🔍 이번 회차 보너스 확인/보정</button>
+        </div>
+      </details>
+
+      <details class="group border border-slate-200 rounded-xl px-3 py-2 mt-2">
+        <summary class="font-black text-sm text-slate-700 cursor-pointer flex items-center justify-between select-none">
+          <span>📤 데이터 내보내기</span>
+          <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </summary>
+        <div class="pt-3">
+          <p class="text-xs text-slate-400 mb-2 font-bold">지금까지의 모든 기록을 파일로 다운로드해서 중간중간 확인/백업할 수 있어요.</p>
+          <button onclick="exportAllData()" class="w-full py-3 bg-emerald-500 text-white font-black rounded-xl shadow-md active:scale-95 transition">📥 백업 파일 내려받기</button>
+        </div>
+      </details>
+
+      <details class="group border border-slate-200 rounded-xl px-3 py-2 mt-2 mb-2">
+        <summary class="font-black text-sm text-slate-700 cursor-pointer flex items-center justify-between select-none">
+          <span>🔐 앱 비밀번호 변경</span>
+          <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </summary>
+        <div class="pt-3">
+          <input type="password" id="oldPwInput" placeholder="현재 비밀번호" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-2 font-bold tracking-widest text-center">
+          <input type="password" id="newPwInput" placeholder="새 비밀번호" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-2 font-bold tracking-widest text-center">
+          <input type="password" id="newPwConfirmInput" placeholder="새 비밀번호 확인" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-sm mb-3 font-bold tracking-widest text-center">
+          <button id="btnChangePassword" onclick="changePassword()" class="w-full py-3 bg-slate-800 text-white font-black rounded-xl shadow-md active:scale-95 transition">비밀번호 변경하기</button>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -616,7 +641,7 @@
 
       const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
       let items = [];
-      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스' }); });
+      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot }); });
 
       const wishesSnap = await db.collection('wishes').orderBy('date','desc').get();
       let wishes = [];
@@ -638,7 +663,7 @@
       return {
         userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
         boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
-        praiseCounts, parentEmails: [], bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
+        praiseCounts, bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
         dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests
       };
     }
@@ -719,7 +744,7 @@
       const luckyStep = Number(board.luckyStep);
       const totalAdded = finalScore + bonusCount;
       if (luckyStep > 0 && curScore < luckyStep && (curScore + totalAdded) >= luckyStep) {
-        await db.collection('items').add({ round, name:'룰렛 추첨권', obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스' });
+        await db.collection('items').add({ round, name:'룰렛 추첨권', obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스', prizesSnapshot: board.luckyText || '' });
       }
 
       const newlyCompleted = await grantRewardIfEligible(round);
@@ -1107,7 +1132,6 @@
     let isAddingReason = false;
     let isCreatingBoard = false;
     let isChangingTheme = false;
-    let isClaimingReward = false;
     let isSavingBuff = false;
     let isSubmittingWish = false;
     let isChangingBoard = false;
@@ -1627,16 +1651,6 @@
       }
       else if (theme === 'footprint') {
         v.innerHTML = renderFootprintTheme(cur, target, lucky);
-      }
-      else if (theme === 'puzzle') {
-        const imgUrl = app.currentBoard.puzzleImg || 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&w=500&q=60';
-        let pieces = ''; 
-        for(let i=1; i<=target; i++) { 
-          const isLucky = (i == lucky);
-          const active = i <= cur ? 'active' : '';
-          pieces += `<div class="puzzle-piece ${active} ${getLuckyClass(isLucky)}" ${getLuckyClick(isLucky)}>${isLucky && i > cur ? '🎁' : ''}</div>`; 
-        }
-        v.innerHTML = `<img src="${imgUrl}" class="absolute inset-0 w-full h-full object-cover rounded-xl"><div class="puzzle-grid">${pieces}</div>`;
       }
 
       if (app.currentBoard.status === '보상 수령 완료') {
@@ -2382,19 +2396,6 @@
         .updateLuckyBox(app.currentBoard.round, step, text, currentRole);
     }
 
-    function triggerReward() {
-      if (isClaimingReward) return;
-      isClaimingReward = true;
-      vibrate(100);
-      document.getElementById('soundFanfare').play();
-      confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
-      setTimeout(() => { 
-        google.script.run
-          .withSuccessHandler(res => { app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); renderBoard(); showToast("보상 수령 완료!"); isClaimingReward = false; })
-          .withFailureHandler(err => { showToast("오류: " + err.message); isClaimingReward = false; })
-          .claimReward(app.currentBoard.round, currentRole); 
-      }, 2000);
-    }
 
     function openRequestModal() {
       document.getElementById('reqReasonSelect').innerHTML = app.praiseList.map(r => `<option value="${r}">${r}</option>`).join('');
@@ -2496,8 +2497,12 @@
     function openRoulette(ticketId) {
       currentRouletteTicketId = ticketId;
       closeModal('itemShopModal');
-      const rawPrizes = normalizeLuckyText(app.currentBoard.luckyText).length > 0
-        ? normalizeLuckyText(app.currentBoard.luckyText)
+      // 🎟️ 이 추첨권이 발급될 당시의 비율(prizesSnapshot)이 있으면 그걸 쓰고,
+      // 옛날에 발급돼서 스냅샷이 없는 추첨권만 예전처럼 현재 회차 설정을 씁니다.
+      const ticketItem = (app.items || []).find(i => i.id === ticketId);
+      const sourceText = (ticketItem && ticketItem.prizesSnapshot) ? ticketItem.prizesSnapshot : app.currentBoard.luckyText;
+      const rawPrizes = normalizeLuckyText(sourceText).length > 0
+        ? normalizeLuckyText(sourceText)
         : [{ name: '꽝', ratio: null }, { name: '다시 뽑기', ratio: null }];
       roulettePrizes = resolvePrizeWeights(rawPrizes);
       drawRouletteWheel();
