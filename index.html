@@ -479,13 +479,22 @@
         <h3 class="font-black text-xl text-pink-600">🎁 럭키박스 (룰렛) 설정</h3>
         <button onclick="closeModal('luckyBoxModal')" class="text-xl text-slate-400">✕</button>
       </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 mb-2">등록된 럭키박스 (원하는 만큼 여러 칸에 설정할 수 있어요)</p>
+        <div id="luckyBoxExistingList" class="space-y-2 max-h-40 overflow-y-auto"></div>
+      </div>
+      <hr class="border-slate-200">
+      <p id="luckyBoxFormTitle" class="text-sm font-black text-slate-700">새 럭키박스 추가</p>
       <select id="luckyStepSelect" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm" onchange="vibrate()"></select>
       <div class="bg-pink-50 p-4 rounded-2xl border border-pink-100">
         <p class="text-xs font-bold text-pink-500 mb-2">당첨될 보상을 한 줄에 하나씩 적어주세요</p>
         <textarea id="luckyBoxTextarea" rows="5" class="w-full p-3 bg-white rounded-xl outline-none text-sm border border-slate-200 font-bold" placeholder="게임 10분 추가&#10;용돈 1000원:50&#10;아이스크림 사주기:20"></textarea>
         <p class="text-[10px] text-slate-400 font-bold mt-1.5 leading-relaxed">💡 "이름:비율" 형식으로 당첨 확률(%)을 지정할 수 있어요.<br>비율을 안 적으면 남은 확률을 똑같이 나눠 가져요. 전부 안 적으면 모두 1/N 확률이에요.</p>
       </div>
-      <button id="btnSaveLucky" onclick="saveLuckyBox()" class="w-full py-4 bg-pink-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">저장하기</button>
+      <div class="flex gap-2">
+        <button id="btnCancelLuckyEdit" onclick="cancelLuckyBoxEdit()" class="hidden px-4 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl active:scale-95 transition">취소</button>
+        <button id="btnSaveLucky" onclick="saveLuckyBox()" class="flex-1 py-4 bg-pink-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">추가하기</button>
+      </div>
     </div>
   </div>
 
@@ -606,14 +615,21 @@
 
       const boardsSnap = await db.collection('boards').orderBy('round').get();
       let boards = [];
-      boardsSnap.forEach(d => boards.push(d.data()));
+      boardsSnap.forEach(d => {
+        const b = d.data();
+        // 🎁 럭키박스: 예전 단일 필드(luckyStep/luckyText) 회차는 배열 1개짜리로 자동 변환해서 호환 유지
+        if (!Array.isArray(b.luckyBoxes)) {
+          b.luckyBoxes = (b.luckyStep && b.luckyText) ? [{ step: Number(b.luckyStep), text: b.luckyText }] : [];
+        }
+        boards.push(b);
+      });
 
       let currentBoard = null;
       if (targetRound) currentBoard = boards.find(b => b.round == targetRound) || null;
       else currentBoard = boards.find(b => b.status === '진행중' || b.status === '완료') || null;
       if (!currentBoard && boards.length > 0) currentBoard = boards[boards.length - 1];
       if (!currentBoard) {
-        await db.collection('boards').doc('1').set({ round:1, targetScore:30, reward:'첫 보상', theme:'rivals', status:'진행중', luckyStep:'', luckyText:'' });
+        await db.collection('boards').doc('1').set({ round:1, targetScore:30, reward:'첫 보상', theme:'rivals', status:'진행중', luckyBoxes:[] });
         return getAppData(1, role);
       }
 
@@ -741,14 +757,19 @@
 
       const boardSnap = await db.collection('boards').doc(String(round)).get();
       const board = boardSnap.data();
-      const luckyStep = Number(board.luckyStep);
+      const luckyBoxes = Array.isArray(board.luckyBoxes) ? board.luckyBoxes : ((board.luckyStep && board.luckyText) ? [{ step: Number(board.luckyStep), text: board.luckyText }] : []);
       const totalAdded = finalScore + bonusCount;
-      if (luckyStep > 0 && curScore < luckyStep && (curScore + totalAdded) >= luckyStep) {
-        await db.collection('items').add({ round, name:'룰렛 추첨권', obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스', prizesSnapshot: board.luckyText || '' });
+      const grantedSteps = [];
+      for (const lb of luckyBoxes) {
+        const step = Number(lb.step);
+        if (step > 0 && curScore < step && (curScore + totalAdded) >= step) {
+          await db.collection('items').add({ round, name:'룰렛 추첨권', obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스', prizesSnapshot: lb.text || '' });
+          grantedSteps.push(step);
+        }
       }
 
       const newlyCompleted = await grantRewardIfEligible(round);
-      return { data: await getAppData(round, role), rowsAdded: addedIds, newlyCompleted };
+      return { data: await getAppData(round, role), rowsAdded: addedIds, newlyCompleted, grantedLuckySteps: grantedSteps };
     }
 
     async function recoverLastPenalty(round, role) {
@@ -846,9 +867,12 @@
       return getAppData(null, 'child');
     }
 
-    async function updateLuckyBox(round, step, text, role) {
+    // 🎁 럭키박스 전체 배열을 통째로 저장합니다. luckyBoxesJson: JSON.stringify([{step, text}, ...])
+    async function updateLuckyBox(round, luckyBoxesJson, role) {
       await ensureAuth();
-      await db.collection('boards').doc(String(round)).update({ luckyStep: step, luckyText: text });
+      let boxes = [];
+      try { boxes = JSON.parse(luckyBoxesJson); } catch (e) { boxes = []; }
+      await db.collection('boards').doc(String(round)).update({ luckyBoxes: boxes });
       return getAppData(round, role);
     }
 
@@ -873,7 +897,7 @@
         await db.collection('boards').doc(String(r)).update({ status: '보상 수령 완료' });
       }
       const newRound = maxRound + 1;
-      await db.collection('boards').doc(String(newRound)).set({ round:newRound, targetScore:Number(targetScore), reward, theme:'rivals', status:'진행중', luckyStep:'', luckyText:'' });
+      await db.collection('boards').doc(String(newRound)).set({ round:newRound, targetScore:Number(targetScore), reward, theme:'rivals', status:'진행중', luckyBoxes:[] });
       return getAppData(newRound, role);
     }
 
@@ -1046,10 +1070,12 @@
         });
 
         out += '\n## Sheet name: Status\n';
-        out += '회차,목표개수,보상,테마,상태,럭키칸,럭키내용\n';
+        out += '회차,목표개수,보상,테마,상태,럭키칸/내용\n';
         boardsSnap.forEach(d => {
           const b = d.data();
-          out += [b.round, b.targetScore, csvEscape(b.reward), b.theme, b.status, b.luckyStep || '', csvEscape(b.luckyText || '')].join(',') + '\n';
+          const boxes = Array.isArray(b.luckyBoxes) ? b.luckyBoxes : ((b.luckyStep && b.luckyText) ? [{step:b.luckyStep, text:b.luckyText}] : []);
+          const luckySummary = boxes.map(lb => lb.step + '칸:' + lb.text).join(' | ');
+          out += [b.round, b.targetScore, csvEscape(b.reward), b.theme, b.status, csvEscape(luckySummary)].join(',') + '\n';
         });
 
         out += '\n## Sheet name: Data\n';
@@ -1601,12 +1627,12 @@
       const cur = app.currentScore;
       const target = app.currentBoard.targetScore;
       const theme = app.currentBoard.theme;
-      const lucky = app.currentBoard.luckyStep;
+      const lucky = (app.currentBoard.luckyBoxes || []).map(lb => Number(lb.step)); // 럭키칸 여러 개 (배열)
       
       v.classList.remove('shake');
       v.innerHTML = '';
       
-      const getLuckyClick = (isLucky) => { return (isLucky && app.isParent) ? 'onclick="openEditLuckyBox(event)"' : ''; };
+      const getLuckyClick = (step) => { return app.isParent ? `onclick="openEditLuckyBox(event, ${step})"` : ''; };
       const getLuckyClass = (isLucky) => { return isLucky ? 'lucky cursor-pointer z-30' : ''; };
 
       if (theme === 'rivals') {
@@ -1614,9 +1640,9 @@
         v.innerHTML = `<div class="step-grid" style="grid-template-columns: repeat(${cols}, 1fr)"></div>`;
         const grid = v.querySelector('.step-grid');
         for(let i=1; i<=target; i++) {
-          const isLucky = (i == lucky);
+          const isLucky = lucky.includes(i);
           const active = i <= cur ? 'active' : '';
-          grid.innerHTML += `<div class="rivals-cell ${active} ${getLuckyClass(isLucky)}" ${getLuckyClick(isLucky)}>${isLucky && i > cur ? '🎁' : i}</div>`;
+          grid.innerHTML += `<div class="rivals-cell ${active} ${getLuckyClass(isLucky)}" ${isLucky ? getLuckyClick(i) : ''}>${isLucky && i > cur ? '🎁' : i}</div>`;
         }
       } 
       else if (theme === 'thermometer') {
@@ -1671,11 +1697,11 @@
         ticksHtml += `<div class="thermo-tick ${isMajor ? 'major' : ''}" style="bottom:${p}%"></div>`;
       }
       let luckyHtml = '';
-      if (lucky) {
-        const lp = Math.max(0, Math.min(100, (lucky / target) * 100));
-        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-        luckyHtml = `<div class="thermo-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= lucky ? '🚩' : '🎁'}</div>`;
-      }
+      lucky.forEach(step => {
+        const lp = Math.max(0, Math.min(100, (step / target) * 100));
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${step})" style="cursor:pointer;"` : '';
+        luckyHtml += `<div class="thermo-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= step ? '🚩' : '🎁'}</div>`;
+      });
       return `
         <div class="thermo-wrap">
           <div class="thermo-label">${cur} / ${target}</div>
@@ -1693,13 +1719,13 @@
       const species = ['🌸', '🌼', '🌻', '🌺'];
       let html = '<div class="garden-cloud" style="top:8%; left:12%;">☁️</div><div class="garden-cloud" style="top:16%; right:14%;">☁️</div>';
       for (let i = 1; i <= target; i++) {
-        const isLucky = (i == lucky);
+        const isLucky = lucky.includes(i);
         const bloomed = i <= cur;
         const isNewest = (i === cur);
         let icon = bloomed ? species[i % species.length] : '🌱';
         if (isLucky && i > cur) icon = '🎁';
         const cls = `garden-flower ${bloomed ? '' : 'seed'} ${isNewest ? 'bloom-in' : ''}`;
-        const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+        const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event, ${i})" style="cursor:pointer;"` : '';
         html += `<span class="${cls}" ${clickAttr}>${icon}</span>`;
       }
       return `<div class="garden-bed"><div class="garden-flowers">${html}</div></div>`;
@@ -1715,11 +1741,11 @@
         starsHtml += `<div class="rocket-star" style="bottom:${p}%; left:${left}%;">✨</div>`;
       }
       let luckyHtml = '';
-      if (lucky) {
-        const lp = Math.max(0, Math.min(100, (lucky / target) * 100));
-        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-        luckyHtml = `<div class="rocket-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= lucky ? '🪐' : '🎁'}</div>`;
-      }
+      lucky.forEach(step => {
+        const lp = Math.max(0, Math.min(100, (step / target) * 100));
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${step})" style="cursor:pointer;"` : '';
+        luckyHtml += `<div class="rocket-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= step ? '🪐' : '🎁'}</div>`;
+      });
       return `
         <div class="rocket-sky">
           <div class="rocket-trail" style="height:${curPercent}%;"></div>
@@ -1741,11 +1767,11 @@
         let rowCells = '';
         for (let c = 0; c < cols && idx <= target; c++, idx++) {
           const i = idx;
-          const isLucky = (i == lucky);
+          const isLucky = lucky.includes(i);
           const filled = i <= cur;
           const style = filled ? `background:${colors[i % colors.length]};` : '';
           const cls = `lego-brick2 ${filled ? '' : 'empty'} ${isLucky ? 'lucky' : ''}`;
-          const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event)" style="cursor:pointer; ${style}"` : (style ? `style="${style}"` : '');
+          const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event, ${i})" style="cursor:pointer; ${style}"` : (style ? `style="${style}"` : '');
           const icon = (isLucky && i > cur) ? '🎁' : '';
           rowCells += `<div class="${cls}" ${clickAttr}>${icon}</div>`;
         }
@@ -1766,11 +1792,11 @@
         const spot = TREE_FRUIT_SPOTS[(i - 1) % TREE_FRUIT_SPOTS.length];
         fruitsHtml += `<div class="tree-fruit" style="left:${spot[0]}%; top:${spot[1]}%;">🍎</div>`;
       }
-      if (lucky) {
-        const spot = TREE_FRUIT_SPOTS[(lucky - 1) % TREE_FRUIT_SPOTS.length];
-        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-        fruitsHtml += `<div class="tree-fruit lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= lucky ? '🍏' : '🎁'}</div>`;
-      }
+      lucky.forEach(step => {
+        const spot = TREE_FRUIT_SPOTS[(step - 1) % TREE_FRUIT_SPOTS.length];
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${step})" style="cursor:pointer;"` : '';
+        fruitsHtml += `<div class="tree-fruit lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= step ? '🍏' : '🎁'}</div>`;
+      });
 
       return `
         <div class="tree-scene">
@@ -1793,11 +1819,11 @@
         cloudsHtml += `<div class="balloon-cloud-mark" style="bottom:${p}%; left:${left}%;">☁️</div>`;
       }
       let luckyHtml = '';
-      if (lucky) {
-        const lp = Math.max(0, Math.min(100, (lucky / target) * 100));
-        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-        luckyHtml = `<div class="balloon-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= lucky ? '🎉' : '🎁'}</div>`;
-      }
+      lucky.forEach(step => {
+        const lp = Math.max(0, Math.min(100, (step / target) * 100));
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${step})" style="cursor:pointer;"` : '';
+        luckyHtml += `<div class="balloon-lucky" style="bottom:${lp}%;" ${clickAttr}>${cur >= step ? '🎉' : '🎁'}</div>`;
+      });
       return `
         <div class="balloon-sky">
           ${cloudsHtml}
@@ -1818,11 +1844,11 @@
         const species = FISH_SPECIES[i % FISH_SPECIES.length];
         fishHtml += `<div class="fishtank-fish" style="left:${spot[0]}%; top:${spot[1]}%; transform: translate(-50%, -50%) ${flip};">${species}</div>`;
       }
-      if (lucky) {
-        const spot = FISHTANK_SPOTS[(lucky - 1) % FISHTANK_SPOTS.length];
-        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-        fishHtml += `<div class="fishtank-fish lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= lucky ? '🐬' : '🎁'}</div>`;
-      }
+      lucky.forEach(step => {
+        const spot = FISHTANK_SPOTS[(step - 1) % FISHTANK_SPOTS.length];
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${step})" style="cursor:pointer;"` : '';
+        fishHtml += `<div class="fishtank-fish lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= step ? '🐬' : '🎁'}</div>`;
+      });
       return `
         <div class="fishtank-scene">
           <div class="fishtank-bubble" style="left:15%; top:80%;">🫧</div>
@@ -1841,7 +1867,7 @@
       let stops = [];
       for (let i = 0; i < target; i++) {
         const filled = (i + 1) <= cur;
-        const isLucky = (i + 1) === lucky;
+        const isLucky = lucky.includes(i + 1);
         let color = filled ? (i % 2 === 0 ? '#fb7185' : '#f9a8d4') : '#e5e7eb';
         if (isLucky && !filled) color = '#fde68a';
         const start = (i * sliceDeg).toFixed(2);
@@ -1851,14 +1877,14 @@
       const conic = `conic-gradient(${stops.join(', ')})`;
 
       let luckyMarkHtml = '';
-      if (lucky) {
-        const midDeg = (lucky - 0.5) * sliceDeg - 90;
+      lucky.forEach(step => {
+        const midDeg = (step - 0.5) * sliceDeg - 90;
         const rad = midDeg * Math.PI / 180;
         const x = 50 + Math.cos(rad) * 34;
         const y = 50 + Math.sin(rad) * 34;
-        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-        luckyMarkHtml = `<div class="cake-lucky-mark" style="left:${x}%; top:${y}%;" ${clickAttr}>${cur >= lucky ? '⭐' : '🎁'}</div>`;
-      }
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${step})" style="cursor:pointer;"` : '';
+        luckyMarkHtml += `<div class="cake-lucky-mark" style="left:${x}%; top:${y}%;" ${clickAttr}>${cur >= step ? '⭐' : '🎁'}</div>`;
+      });
 
       const isDone = cur >= target;
       return `
@@ -1883,11 +1909,11 @@
         }
         if (r % 2 === 1) rowIndices.reverse();
         rowIndices.forEach(i => {
-          const isLucky = (i == lucky);
+          const isLucky = lucky.includes(i);
           const filled = i <= cur;
           const isToken = (i === cur && cur > 0);
           const cls = `board-cell ${filled ? 'filled' : ''} ${isToken ? 'token' : ''} ${isLucky ? 'lucky' : ''}`;
-          const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
+          const clickAttr = (isLucky && app.isParent) ? `onclick="openEditLuckyBox(event, ${i})" style="cursor:pointer;"` : '';
           const icon = isToken ? '🐹' : (isLucky && i > cur) ? '🎁' : (filled ? '✔️' : i);
           cellsHtml += `<div class="${cls}" ${clickAttr}>${icon}</div>`;
         });
@@ -1914,11 +1940,11 @@
         lineHtml = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"><polyline points="${pts}" fill="none" stroke="rgba(253,224,71,0.55)" stroke-width="0.6" /></svg>`;
       }
       let luckyHtml = '';
-      if (lucky) {
-        const spot = CONSTELLATION_SPOTS[(lucky - 1) % CONSTELLATION_SPOTS.length];
-        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-        luckyHtml = `<div class="constellation-star lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= lucky ? '🌟' : '🎁'}</div>`;
-      }
+      lucky.forEach(step => {
+        const spot = CONSTELLATION_SPOTS[(step - 1) % CONSTELLATION_SPOTS.length];
+        const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${step})" style="cursor:pointer;"` : '';
+        luckyHtml += `<div class="constellation-star lucky" style="left:${spot[0]}%; top:${spot[1]}%;" ${clickAttr}>${cur >= step ? '🌟' : '🎁'}</div>`;
+      });
       return `<div class="constellation-sky">${lineHtml}${dotsHtml}${starsHtml}${luckyHtml}</div>`;
     }
 
@@ -1928,10 +1954,10 @@
         const y = 88 - (i / target) * 76;
         const x = 50 + Math.sin(i * 0.9) * 26;
         const filled = i <= cur;
-        const isLucky = (i == lucky);
+        const isLucky = lucky.includes(i);
         if (isLucky) {
-          const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event)" style="cursor:pointer;"` : '';
-          html += `<div class="footprint-lucky" style="left:${x}%; top:${y}%;" ${clickAttr}>${cur >= lucky ? '🐾' : '🎁'}</div>`;
+          const clickAttr = app.isParent ? `onclick="openEditLuckyBox(event, ${i})" style="cursor:pointer;"` : '';
+          html += `<div class="footprint-lucky" style="left:${x}%; top:${y}%;" ${clickAttr}>${cur >= i ? '🐾' : '🎁'}</div>`;
         } else {
           html += `<div class="footprint-mark ${filled ? '' : 'empty'}" style="left:${x}%; top:${y}%;">🐾</div>`;
         }
@@ -2077,9 +2103,8 @@
             document.getElementById('soundFanfare').play();
           }
 
-          const lucky = res.data.currentBoard.luckyStep;
-          if (lucky > 0 && job.prevScore < lucky && res.data.currentScore >= lucky) {
-            showToast(`🎁 추첨권 획득! 보관함을 확인하세요!`);
+          if (res.grantedLuckySteps && res.grantedLuckySteps.length > 0) {
+            showToast(res.grantedLuckySteps.length > 1 ? `🎁 추첨권 ${res.grantedLuckySteps.length}장 획득! 보관함을 확인하세요!` : `🎁 추첨권 획득! 보관함을 확인하세요!`);
             confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
           }
           const target = res.data.currentBoard.targetScore;
@@ -2359,41 +2384,120 @@
       }
     }
 
-    function openLuckyBoxModal() {
+    let editingLuckyBoxStep = null; // null이면 새로 추가하는 중, 숫자면 그 칸을 수정하는 중
+
+    function getLuckyBoxes() {
+      return app.currentBoard.luckyBoxes || [];
+    }
+
+    // 새 럭키박스를 등록할 때 고를 수 있는 칸 목록 (이미 등록된 칸은 제외, 지금 수정 중인 칸은 포함)
+    function populateLuckyStepSelect(preselect) {
       const sel = document.getElementById('luckyStepSelect');
       sel.innerHTML = '';
-      for(let i = app.currentScore + 1; i <= app.currentBoard.targetScore; i++) sel.innerHTML += `<option value="${i}">${i}번째 칸</option>`;
+      const usedSteps = new Set(getLuckyBoxes().map(lb => Number(lb.step)).filter(s => s !== editingLuckyBoxStep));
+      for (let i = app.currentScore + 1; i <= app.currentBoard.targetScore; i++) {
+        if (usedSteps.has(i)) continue;
+        sel.innerHTML += `<option value="${i}">${i}번째 칸</option>`;
+      }
+      if (preselect) sel.value = preselect;
+    }
+
+    function renderLuckyBoxExistingList() {
+      const container = document.getElementById('luckyBoxExistingList');
+      const boxes = getLuckyBoxes().slice().sort((a, b) => Number(a.step) - Number(b.step));
+      if (boxes.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">아직 등록된 럭키박스가 없어요.</p>';
+        return;
+      }
+      container.innerHTML = boxes.map(lb => {
+        const prizes = normalizeLuckyText(lb.text);
+        const names = prizes.map(p => p.name).join(', ');
+        return `<div class="flex items-center gap-2 bg-pink-50 p-2.5 rounded-xl border border-pink-100">
+          <div class="flex-1 min-w-0">
+            <span class="text-xs font-black text-pink-600">${lb.step}번째 칸</span>
+            <p class="text-[11px] text-slate-500 truncate">${names}</p>
+          </div>
+          <button onclick="startEditLuckyBox(${lb.step})" class="px-2.5 py-1.5 bg-white text-slate-500 text-xs font-black rounded-lg border border-slate-200 active:scale-95 transition">수정</button>
+          <button onclick="deleteLuckyBoxEntry(${lb.step})" class="px-2.5 py-1.5 bg-red-50 text-red-500 text-xs font-black rounded-lg border border-red-200 active:scale-95 transition">삭제</button>
+        </div>`;
+      }).join('');
+    }
+
+    function resetLuckyBoxForm() {
+      editingLuckyBoxStep = null;
+      document.getElementById('luckyBoxFormTitle').innerText = '새 럭키박스 추가';
       document.getElementById('luckyBoxTextarea').value = '';
+      document.getElementById('btnSaveLucky').innerText = '추가하기';
+      document.getElementById('btnCancelLuckyEdit').classList.add('hidden');
+      populateLuckyStepSelect();
+    }
+
+    function openLuckyBoxModal() {
+      renderLuckyBoxExistingList();
+      resetLuckyBoxForm();
       openModal('luckyBoxModal');
     }
 
-    function openEditLuckyBox(event) {
+    // 스티커판의 럭키칸을 직접 눌렀을 때 그 칸을 바로 수정하도록 엽니다.
+    function openEditLuckyBox(event, step) {
       event.stopPropagation();
-      vibrate();
-      const sel = document.getElementById('luckyStepSelect');
-      sel.innerHTML = '';
-      for(let i = app.currentScore + 1; i <= app.currentBoard.targetScore; i++) sel.innerHTML += `<option value="${i}">${i}번째 칸</option>`;
-      if(app.currentBoard.luckyStep > app.currentScore) sel.value = app.currentBoard.luckyStep;
+      renderLuckyBoxExistingList();
+      startEditLuckyBox(step);
+      openModal('luckyBoxModal');
+    }
 
-      const prizes = normalizeLuckyText(app.currentBoard.luckyText);
+    function startEditLuckyBox(step) {
+      vibrate();
+      const lb = getLuckyBoxes().find(l => Number(l.step) === Number(step));
+      if (!lb) return;
+      editingLuckyBoxStep = Number(step);
+      document.getElementById('luckyBoxFormTitle').innerText = `${step}번째 칸 수정`;
+      populateLuckyStepSelect(step);
+      const prizes = normalizeLuckyText(lb.text);
       const lines = prizes.map(p => (p.ratio !== null && p.ratio !== undefined) ? `${p.name}:${p.ratio}` : p.name);
       document.getElementById('luckyBoxTextarea').value = lines.join('\n');
-      openModal('luckyBoxModal');
+      document.getElementById('btnSaveLucky').innerText = '수정 저장';
+      document.getElementById('btnCancelLuckyEdit').classList.remove('hidden');
     }
-    
+
+    function cancelLuckyBoxEdit() {
+      vibrate();
+      resetLuckyBoxForm();
+    }
+
+    function persistLuckyBoxes(boxesArr, successMsg) {
+      const btn = document.getElementById('btnSaveLucky');
+      btn.disabled = true;
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
+          renderBoard();
+          renderLuckyBoxExistingList();
+          resetLuckyBoxForm();
+          btn.disabled = false;
+          showToast(successMsg);
+        })
+        .withFailureHandler(err => { showToast("오류: " + err.message); btn.disabled = false; })
+        .updateLuckyBox(app.currentBoard.round, JSON.stringify(boxesArr), currentRole);
+    }
+
     function saveLuckyBox() {
       vibrate();
-      const step = document.getElementById('luckyStepSelect').value;
+      const step = Number(document.getElementById('luckyStepSelect').value);
       const raw = document.getElementById('luckyBoxTextarea').value;
       const prizes = parseLuckyBoxText(raw);
-      if(!step || prizes.length === 0) { showToast("럭키박스 내용을 하나 이상 적어주세요!"); return; }
+      if (!step || prizes.length === 0) { showToast("럭키박스 내용을 하나 이상 적어주세요!"); return; }
       const text = JSON.stringify(prizes);
-      const btn = document.getElementById('btnSaveLucky');
-      btn.disabled = true; btn.innerText = "저장 중...";
-      google.script.run
-        .withSuccessHandler(res => { app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); closeModal('luckyBoxModal'); showToast("럭키박스 룰렛 설정 완료! 🎰"); renderBoard(); btn.disabled = false; btn.innerText = "저장하기"; })
-        .withFailureHandler(err => { showToast("오류: " + err.message); btn.disabled = false; btn.innerText = "저장하기"; })
-        .updateLuckyBox(app.currentBoard.round, step, text, currentRole);
+      let boxes = getLuckyBoxes().filter(l => Number(l.step) !== (editingLuckyBoxStep !== null ? editingLuckyBoxStep : step));
+      boxes.push({ step, text });
+      persistLuckyBoxes(boxes, "럭키박스 설정 완료! 🎰");
+    }
+
+    function deleteLuckyBoxEntry(step) {
+      vibrate();
+      const boxes = getLuckyBoxes().filter(l => Number(l.step) !== Number(step));
+      persistLuckyBoxes(boxes, "럭키박스를 삭제했어요.");
     }
 
 
@@ -2500,7 +2604,8 @@
       // 🎟️ 이 추첨권이 발급될 당시의 비율(prizesSnapshot)이 있으면 그걸 쓰고,
       // 옛날에 발급돼서 스냅샷이 없는 추첨권만 예전처럼 현재 회차 설정을 씁니다.
       const ticketItem = (app.items || []).find(i => i.id === ticketId);
-      const sourceText = (ticketItem && ticketItem.prizesSnapshot) ? ticketItem.prizesSnapshot : app.currentBoard.luckyText;
+      const legacyFallback = (app.currentBoard.luckyBoxes && app.currentBoard.luckyBoxes[0]) ? app.currentBoard.luckyBoxes[0].text : '';
+      const sourceText = (ticketItem && ticketItem.prizesSnapshot) ? ticketItem.prizesSnapshot : legacyFallback;
       const rawPrizes = normalizeLuckyText(sourceText).length > 0
         ? normalizeLuckyText(sourceText)
         : [{ name: '꽝', ratio: null }, { name: '다시 뽑기', ratio: null }];
