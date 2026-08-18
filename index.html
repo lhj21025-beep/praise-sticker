@@ -312,12 +312,12 @@
         <h3>🎒 보관함</h3><button onclick="closeModal('itemShopModal')" class="text-xl">✕</button>
       </div>
       <div class="flex bg-white shrink-0 border-b">
-        <button id="mainTabReward" onclick="switchMainTab('보상')" class="flex-1 py-3 font-black text-indigo-600 border-b-2 border-indigo-500">🎁 보상함</button>
-        <button id="mainTabRandom" onclick="switchMainTab('랜덤박스')" class="flex-1 py-3 font-bold text-slate-400 border-b-2 border-transparent">🎲 랜덤박스</button>
+        <button id="mainTabReward" onclick="switchMainTab('보상')" class="flex-1 py-3 font-black text-indigo-600 border-b-2 border-indigo-500">🎁 보상함 <span id="mainTabRewardCount" class="text-xs font-black"></span></button>
+        <button id="mainTabRandom" onclick="switchMainTab('랜덤박스')" class="flex-1 py-3 font-bold text-slate-400 border-b-2 border-transparent">🎲 랜덤박스 <span id="mainTabRandomCount" class="text-xs font-bold"></span></button>
       </div>
       <div class="flex bg-slate-100 shrink-0">
-        <button id="tabUnused" onclick="switchItemTab('unused')" class="flex-1 py-2 text-sm font-black text-pink-600 border-b-2 border-pink-500 bg-white">사용 전</button>
-        <button id="tabUsed" onclick="switchItemTab('used')" class="flex-1 py-2 text-sm font-bold text-slate-400 border-b-2 border-transparent">사용 후</button>
+        <button id="tabUnused" onclick="switchItemTab('unused')" class="flex-1 py-2 text-sm font-black text-pink-600 border-b-2 border-pink-500 bg-white">사용 전 <span id="tabUnusedCount" class="text-xs font-black"></span></button>
+        <button id="tabUsed" onclick="switchItemTab('used')" class="flex-1 py-2 text-sm font-bold text-slate-400 border-b-2 border-transparent">사용 후 <span id="tabUsedCount" class="text-xs font-bold"></span></button>
       </div>
       <ul id="itemList" class="p-5 space-y-3 overflow-y-auto bg-slate-50 flex-1"></ul>
     </div>
@@ -2540,6 +2540,16 @@
       const list = document.getElementById('itemList');
       const statusFilter = currentItemTab === 'unused' ? '사용 전' : '사용 후';
       const filtered = app.items.filter(i => i.status === statusFilter && i.type === currentBoxType);
+
+      // 🔢 사용 전/사용 후 탭 옆에 현재 보상함(또는 랜덤박스) 기준 개수 표시
+      const unusedCount = app.items.filter(i => i.status === '사용 전' && i.type === currentBoxType).length;
+      const usedCount = app.items.filter(i => i.status === '사용 후' && i.type === currentBoxType).length;
+      document.getElementById('tabUnusedCount').innerText = `(${unusedCount})`;
+      document.getElementById('tabUsedCount').innerText = `(${usedCount})`;
+
+      // 🔢 보상함/랜덤박스 대분류 탭에도 아직 안 쓴 개수를 표시 (아이가 뭘 확인해야 할지 한눈에 보이도록)
+      document.getElementById('mainTabRewardCount').innerText = `(${app.items.filter(i => i.status === '사용 전' && i.type === '보상').length})`;
+      document.getElementById('mainTabRandomCount').innerText = `(${app.items.filter(i => i.status === '사용 전' && i.type === '랜덤박스').length})`;
       
       if(filtered.length === 0) {
         list.innerHTML = `<p class="text-center text-slate-400 py-10 font-bold">목록이 비어있어요.</p>`;
