@@ -408,12 +408,31 @@
       <!-- 가끔 쓰는 기능들은 접어두고, 필요할 때만 펼쳐서 씁니다 -->
       <details class="group border border-slate-200 rounded-xl px-3 py-2">
         <summary class="font-black text-sm text-slate-700 cursor-pointer flex items-center justify-between select-none">
-          <span>🔢 칭찬 사유별 스티커 개수</span>
+          <span>📋 칭찬 사유 관리</span>
           <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
         </summary>
         <div class="pt-3">
-          <p class="text-xs text-slate-400 mb-2 font-bold">사유마다 한 번에 줄 스티커 개수를 다르게 정할 수 있어요.</p>
-          <div id="reasonCountList" class="space-y-2 max-h-52 overflow-y-auto"></div>
+          <p class="text-xs text-slate-400 mb-2 font-bold">이름·기본 개수를 바꾸거나, 삭제하거나, ▲▼로 순서를 바꿀 수 있어요. 다 고친 뒤 아래 저장 버튼을 눌러주세요.</p>
+          <div id="praiseReasonMgmtList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="addPraiseReasonRow()" class="flex-1 py-2.5 bg-slate-100 text-slate-500 text-xs font-black rounded-lg border border-dashed border-slate-300 active:scale-95 transition">＋ 사유 추가</button>
+            <button onclick="savePraiseReasonList()" class="flex-1 py-2.5 bg-indigo-500 text-white text-xs font-black rounded-lg active:scale-95 transition">변경사항 저장</button>
+          </div>
+        </div>
+      </details>
+
+      <details class="group border border-slate-200 rounded-xl px-3 py-2 mt-2">
+        <summary class="font-black text-sm text-slate-700 cursor-pointer flex items-center justify-between select-none">
+          <span>❌ 감점 사유 관리</span>
+          <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </summary>
+        <div class="pt-3">
+          <p class="text-xs text-slate-400 mb-2 font-bold">이름을 바꾸거나, 삭제하거나, ▲▼로 순서를 바꿀 수 있어요. 다 고친 뒤 아래 저장 버튼을 눌러주세요.</p>
+          <div id="penaltyReasonMgmtList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="addPenaltyReasonRow()" class="flex-1 py-2.5 bg-slate-100 text-slate-500 text-xs font-black rounded-lg border border-dashed border-slate-300 active:scale-95 transition">＋ 사유 추가</button>
+            <button onclick="savePenaltyReasonList()" class="flex-1 py-2.5 bg-red-500 text-white text-xs font-black rounded-lg active:scale-95 transition">변경사항 저장</button>
+          </div>
         </div>
       </details>
 
@@ -976,12 +995,19 @@
       return getAppData(null, role);
     }
 
-    async function updateReasonCount(reasonName, count, role) {
+    // 📋 칭찬/감점 사유 목록 전체를 통째로 교체합니다 (이름 수정, 삭제, 순서 변경을 한 번에 저장).
+    // type: 'praise' → listJson은 [{name,count}] / type: 'penalty' → listJson은 ["사유1", ...]
+    async function updateReasonList(type, listJson, role) {
       await ensureAuth();
-      const state = await getStateDoc();
-      const cnt = Number(count);
-      const list = (state.praiseReasons || []).map(r => r.name === reasonName ? { name: r.name, count: (cnt && cnt > 0) ? cnt : 1 } : r);
-      await db.collection('meta').doc('state').update({ praiseReasons: list });
+      let list = [];
+      try { list = JSON.parse(listJson); } catch (e) { list = []; }
+      if (type === 'praise') {
+        list = list.filter(r => r && r.name && r.name.trim() !== '').map(r => ({ name: r.name.trim(), count: (Number(r.count) > 0) ? Number(r.count) : 1 }));
+        await db.collection('meta').doc('state').update({ praiseReasons: list });
+      } else {
+        list = list.filter(r => r && String(r).trim() !== '').map(r => String(r).trim());
+        await db.collection('meta').doc('state').update({ penaltyReasons: list });
+      }
       return getAppData(null, role);
     }
 
@@ -1105,7 +1131,7 @@
       authenticate, changeAppPassword, getAppData, addStampRecord, recoverLastPenalty,
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
-      updateReasonCount, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
+      updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
       getReportStats, dismissRequest
     };
 
@@ -2199,44 +2225,127 @@
     function openEditBoardModal() {
       document.getElementById('editTarget').value = app.currentBoard.targetScore;
       document.getElementById('editReward').value = app.currentBoard.reward;
-      renderReasonCountList();
+      initReasonManagement();
       openModal('editBoardModal');
     }
 
-    function renderReasonCountList() {
-      const container = document.getElementById('reasonCountList');
-      const counts = app.praiseCounts || {};
-      if (!app.praiseList || app.praiseList.length === 0) {
+    // 📋 사유 관리: 화면에서 자유롭게 편집(이름 수정/삭제/순서 변경)하는 동안은
+    // 로컬 작업본(workingPraiseReasons / workingPenaltyReasons)만 바꾸고,
+    // "변경사항 저장" 버튼을 눌렀을 때 한 번에 서버로 통째로 저장합니다.
+    let workingPraiseReasons = [];
+    let workingPenaltyReasons = [];
+
+    function initReasonManagement() {
+      workingPraiseReasons = (app.praiseList || []).map(name => ({ name, count: (app.praiseCounts && app.praiseCounts[name]) || 1 }));
+      workingPenaltyReasons = (app.penaltyList || []).slice();
+      renderPraiseReasonMgmt();
+      renderPenaltyReasonMgmt();
+    }
+
+    function renderPraiseReasonMgmt() {
+      const container = document.getElementById('praiseReasonMgmtList');
+      if (workingPraiseReasons.length === 0) {
         container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">등록된 칭찬 사유가 없어요.</p>';
         return;
       }
-      container.innerHTML = app.praiseList.map(reason => `
-        <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl">
-          <span class="flex-1 text-sm font-bold text-slate-600 truncate">${reason}</span>
-          <input type="number" min="1" value="${counts[reason] || 1}" id="reasonCount_${encodeURIComponent(reason)}" class="w-16 p-2 bg-white border border-slate-200 rounded-lg text-center font-black text-sm outline-none">
-          <span class="text-xs text-slate-400 font-bold">개</span>
-          <button onclick="saveReasonCount('${reason.replace(/'/g, "\\'")}')" class="px-3 py-2 bg-indigo-500 text-white text-xs font-black rounded-lg active:scale-95 transition">저장</button>
+      container.innerHTML = workingPraiseReasons.map((r, i) => `
+        <div class="flex items-center gap-1.5 bg-slate-50 p-2 rounded-xl">
+          <div class="flex flex-col">
+            <button onclick="movePraiseReason(${i}, -1)" class="w-5 h-5 flex items-center justify-center text-slate-400 ${i === 0 ? 'opacity-30' : ''}"><i class="text-[10px]">▲</i></button>
+            <button onclick="movePraiseReason(${i}, 1)" class="w-5 h-5 flex items-center justify-center text-slate-400 ${i === workingPraiseReasons.length - 1 ? 'opacity-30' : ''}"><i class="text-[10px]">▼</i></button>
+          </div>
+          <input type="text" value="${r.name.replace(/"/g, '&quot;')}" oninput="workingPraiseReasons[${i}].name = this.value" class="flex-1 min-w-0 p-2 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none">
+          <input type="number" min="1" value="${r.count}" oninput="workingPraiseReasons[${i}].count = parseInt(this.value)||1" class="w-14 p-2 bg-white border border-slate-200 rounded-lg text-center font-black text-sm outline-none">
+          <span class="text-[10px] text-slate-400 font-bold">개</span>
+          <button onclick="deletePraiseReasonRow(${i})" class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-400 rounded-lg border border-red-100 active:scale-95 transition">✕</button>
         </div>
       `).join('');
     }
 
-    let isSavingReasonCount = false;
-    function saveReasonCount(reason) {
-      if (isSavingReasonCount) return;
-      const input = document.getElementById('reasonCount_' + encodeURIComponent(reason));
-      let count = parseInt(input.value);
-      if (isNaN(count) || count < 1) count = 1;
-      isSavingReasonCount = true;
+    function movePraiseReason(i, dir) {
+      const ti = i + dir;
+      if (ti < 0 || ti >= workingPraiseReasons.length) return;
       vibrate();
+      [workingPraiseReasons[i], workingPraiseReasons[ti]] = [workingPraiseReasons[ti], workingPraiseReasons[i]];
+      renderPraiseReasonMgmt();
+    }
+    function deletePraiseReasonRow(i) {
+      vibrate();
+      workingPraiseReasons.splice(i, 1);
+      renderPraiseReasonMgmt();
+    }
+    function addPraiseReasonRow() {
+      vibrate();
+      workingPraiseReasons.push({ name: '', count: 1 });
+      renderPraiseReasonMgmt();
+    }
+    let isSavingPraiseReasons = false;
+    function savePraiseReasonList() {
+      if (isSavingPraiseReasons) return;
+      isSavingPraiseReasons = true;
+      vibrate();
+      const list = workingPraiseReasons.filter(r => r.name.trim() !== '');
       google.script.run
         .withSuccessHandler(res => {
           app = res;
-          renderReasonCountList();
-          showToast(`"${reason}" 사유의 스티커 개수가 ${count}개로 저장됐어요.`);
-          isSavingReasonCount = false;
+          initReasonManagement();
+          showToast('칭찬 사유 목록이 저장됐어요! 📋');
+          isSavingPraiseReasons = false;
         })
-        .withFailureHandler(err => { showToast("오류: " + err.message); isSavingReasonCount = false; })
-        .updateReasonCount(reason, count, currentRole);
+        .withFailureHandler(err => { showToast("오류: " + err.message); isSavingPraiseReasons = false; })
+        .updateReasonList('praise', JSON.stringify(list), currentRole);
+    }
+
+    function renderPenaltyReasonMgmt() {
+      const container = document.getElementById('penaltyReasonMgmtList');
+      if (workingPenaltyReasons.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">등록된 감점 사유가 없어요.</p>';
+        return;
+      }
+      container.innerHTML = workingPenaltyReasons.map((name, i) => `
+        <div class="flex items-center gap-1.5 bg-slate-50 p-2 rounded-xl">
+          <div class="flex flex-col">
+            <button onclick="movePenaltyReason(${i}, -1)" class="w-5 h-5 flex items-center justify-center text-slate-400 ${i === 0 ? 'opacity-30' : ''}"><i class="text-[10px]">▲</i></button>
+            <button onclick="movePenaltyReason(${i}, 1)" class="w-5 h-5 flex items-center justify-center text-slate-400 ${i === workingPenaltyReasons.length - 1 ? 'opacity-30' : ''}"><i class="text-[10px]">▼</i></button>
+          </div>
+          <input type="text" value="${name.replace(/"/g, '&quot;')}" oninput="workingPenaltyReasons[${i}] = this.value" class="flex-1 min-w-0 p-2 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none">
+          <button onclick="deletePenaltyReasonRow(${i})" class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-400 rounded-lg border border-red-100 active:scale-95 transition">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function movePenaltyReason(i, dir) {
+      const ti = i + dir;
+      if (ti < 0 || ti >= workingPenaltyReasons.length) return;
+      vibrate();
+      [workingPenaltyReasons[i], workingPenaltyReasons[ti]] = [workingPenaltyReasons[ti], workingPenaltyReasons[i]];
+      renderPenaltyReasonMgmt();
+    }
+    function deletePenaltyReasonRow(i) {
+      vibrate();
+      workingPenaltyReasons.splice(i, 1);
+      renderPenaltyReasonMgmt();
+    }
+    function addPenaltyReasonRow() {
+      vibrate();
+      workingPenaltyReasons.push('');
+      renderPenaltyReasonMgmt();
+    }
+    let isSavingPenaltyReasons = false;
+    function savePenaltyReasonList() {
+      if (isSavingPenaltyReasons) return;
+      isSavingPenaltyReasons = true;
+      vibrate();
+      const list = workingPenaltyReasons.filter(name => name.trim() !== '');
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          initReasonManagement();
+          showToast('감점 사유 목록이 저장됐어요! 📋');
+          isSavingPenaltyReasons = false;
+        })
+        .withFailureHandler(err => { showToast("오류: " + err.message); isSavingPenaltyReasons = false; })
+        .updateReasonList('penalty', JSON.stringify(list), currentRole);
     }
 
     let isRepairingBonuses = false;
