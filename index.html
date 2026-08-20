@@ -1026,6 +1026,35 @@
       return getAppData(null, role);
     }
 
+    // 🗓️ 로컬(내 기기) 기준 날짜 문자열(YYYY-MM-DD)로 변환 — UTC로 자르면 새벽 시간대에 하루 밀리는 오차가 생겨서 반드시 Date 객체를 거칩니다.
+    function localDateStr(iso) {
+      const d = new Date(iso);
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+
+    // 🗓️ 회차별로 첫 기록일~마지막 기록일을 구해서 "며칠 걸렸는지" 계산합니다.
+    async function getRoundDurations(role) {
+      await ensureAuth();
+      const logsSnap = await db.collection('logs').get();
+      const byRound = {};
+      logsSnap.forEach(d => {
+        const l = d.data();
+        if (!l.date) return;
+        const dateOnly = localDateStr(l.date);
+        if (!byRound[l.round]) byRound[l.round] = { first: dateOnly, last: dateOnly };
+        if (dateOnly < byRound[l.round].first) byRound[l.round].first = dateOnly;
+        if (dateOnly > byRound[l.round].last) byRound[l.round].last = dateOnly;
+      });
+      const result = {};
+      Object.keys(byRound).forEach(round => {
+        const { first, last } = byRound[round];
+        const days = Math.round((new Date(last) - new Date(first)) / 86400000) + 1;
+        result[round] = { first, last, days };
+      });
+      return result;
+    }
+
     async function getReportStats(role) {
       await ensureAuth();
       const logsSnap = await db.collection('logs').get();
@@ -1132,7 +1161,7 @@
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
-      getReportStats, dismissRequest
+      getReportStats, dismissRequest, getRoundDurations
     };
 
     function __makeRunner() {
@@ -2395,6 +2424,7 @@
     }
 
     function openBoardHistoryModal() {
+      vibrate();
       const list = document.getElementById('boardHistoryList');
       list.innerHTML = app.boards.map(b => `
         <li class="bg-white p-4 rounded-xl border border-slate-200 cursor-pointer hover:bg-indigo-50 shadow-sm transition" onclick="changeBoard(${b.round})">
@@ -2405,6 +2435,38 @@
         </li>
       `).join('');
       openModal('boardHistoryModal');
+      // 🗓️ 소요일수는 로그 전체를 훑어야 해서 살짝 늦게 도착 → 계산되는 대로 조용히 채워 넣습니다.
+      google.script.run
+        .withSuccessHandler(durations => { renderBoardHistoryList(durations || {}); })
+        .withFailureHandler(() => {})
+        .getRoundDurations(currentRole);
+    }
+
+    function renderBoardHistoryList(durations) {
+      const list = document.getElementById('boardHistoryList');
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      list.innerHTML = app.boards.map(b => {
+        const d = durations[b.round];
+        let daysBadge = '';
+        if (d) {
+          if (b.status === '진행중') {
+            const days = Math.round((new Date(todayStr) - new Date(d.first)) / 86400000) + 1;
+            daysBadge = `<span class="text-[11px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">🗓️ ${days}일째 진행중</span>`;
+          } else {
+            daysBadge = `<span class="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">🗓️ ${d.days}일 만에 완성</span>`;
+          }
+        }
+        return `
+        <li class="bg-white p-4 rounded-xl border border-slate-200 cursor-pointer hover:bg-indigo-50 shadow-sm transition" onclick="changeBoard(${b.round})">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-black text-indigo-500">${b.round}회차 <span class="text-xs text-slate-400">(${b.status})</span></span>
+            ${daysBadge}
+          </div>
+          <div class="font-bold text-slate-700">목표: ${b.reward} <span class="text-xs text-slate-400">(${b.targetScore}개)</span></div>
+        </li>
+      `;
+      }).join('');
     }
 
     function changeBoard(round) {
