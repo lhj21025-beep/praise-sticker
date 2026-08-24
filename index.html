@@ -1163,11 +1163,16 @@
         });
 
         out += '\n## Sheet name: Status\n';
-        out += '회차,목표개수,보상,테마,상태,럭키칸/내용\n';
+        out += '회차,목표개수,보상,테마,상태,럭키박스\n';
         boardsSnap.forEach(d => {
           const b = d.data();
           const boxes = Array.isArray(b.luckyBoxes) ? b.luckyBoxes : ((b.luckyStep && b.luckyText) ? [{step:b.luckyStep, text:b.luckyText}] : []);
-          const luckySummary = boxes.map(lb => lb.step + '칸:' + lb.text).join(' | ');
+          // 🎁 원시 JSON이 아니라 "이름:비율%" 형태로 사람이 읽기 쉽게 풀어서 내보냅니다.
+          const luckySummary = boxes.map(lb => {
+            const prizes = normalizeLuckyText(lb.text);
+            const readable = prizes.map(p => (p.ratio !== null && p.ratio !== undefined) ? `${p.name}:${p.ratio}%` : p.name).join(', ');
+            return `${lb.step}칸[${readable}]`;
+          }).join(' | ');
           out += [b.round, b.targetScore, csvEscape(b.reward), b.theme, b.status, csvEscape(luckySummary)].join(',') + '\n';
         });
 
@@ -2507,6 +2512,17 @@
         } else if (b.daysTaken) {
           daysBadge = `<span class="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">🗓️ ${b.daysTaken}일 만에 완성</span>`;
         }
+        // 🎁 그 회차에 등록됐던 럭키박스 내용을 목록에서 바로 볼 수 있도록 요약
+        const boxes = Array.isArray(b.luckyBoxes) ? b.luckyBoxes : [];
+        let luckyHtml = '';
+        if (boxes.length > 0) {
+          const parts = boxes.slice().sort((x,y) => Number(x.step) - Number(y.step)).map(lb => {
+            const prizes = normalizeLuckyText(lb.text);
+            const readable = prizes.map(p => (p.ratio !== null && p.ratio !== undefined) ? `${p.name}(${p.ratio}%)` : p.name).join(', ');
+            return `${lb.step}칸: ${readable}`;
+          });
+          luckyHtml = `<div class="text-[11px] text-pink-500 font-bold mt-1">🎁 ${parts.join(' · ')}</div>`;
+        }
         return `
         <li class="bg-white p-4 rounded-xl border border-slate-200 cursor-pointer hover:bg-indigo-50 shadow-sm transition" onclick="changeBoard(${b.round})">
           <div class="flex justify-between items-center mb-1">
@@ -2514,6 +2530,7 @@
             ${daysBadge}
           </div>
           <div class="font-bold text-slate-700">목표: ${b.reward} <span class="text-xs text-slate-400">(${b.targetScore}개)</span></div>
+          ${luckyHtml}
         </li>
       `;
       }).join('');
