@@ -195,7 +195,7 @@
       <div class="flex flex-col mb-3 gap-3">
         <h1 class="text-2xl font-black tracking-tighter">✨ 칭찬스티커</h1>
         <div class="flex flex-wrap gap-2">
-          <span class="text-[10px] font-bold bg-white/20 px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/30 transition shadow-sm flex items-center" id="userTitle" onclick="openModal('levelModal')">...</span>
+          <span class="text-[10px] font-bold bg-white/20 px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/30 transition shadow-sm flex items-center" id="userTitle" onclick="openLevelModal()">...</span>
           <button onclick="openItemShop()" class="text-[10px] font-bold bg-pink-500/90 px-3 py-1.5 rounded-full cursor-pointer hover:bg-pink-50 transition shadow-sm active:scale-95 flex items-center">🎒 보관함</button>
           
           <button onclick="openWishlistModal()" class="text-[10px] font-bold bg-amber-500 px-3 py-1.5 rounded-full cursor-pointer hover:bg-amber-600 transition shadow-sm active:scale-95 flex items-center text-white">🙏 소원수리함</button>
@@ -267,14 +267,14 @@
 
       <div id="parentControls" class="hidden space-y-4">
         <div id="reasonArea" class="hidden p-5 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 space-y-4 transition-all">
+          <button id="submitBtn" onclick="executeStamp()" class="w-full py-5 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2">
+            <span id="btnText"></span>
+          </button>
           <div class="flex gap-2">
             <select id="reasonSelect" class="flex-1 p-4 rounded-2xl border-none shadow-sm font-bold text-slate-700 outline-none" onchange="vibrate()"></select>
             <button id="btnNewReason" onclick="promptAddReason()" class="bg-slate-200 px-4 rounded-2xl text-xs font-black text-slate-500 whitespace-nowrap active:scale-95 transition">신규 사유</button>
           </div>
           <input type="text" id="detailInput" class="w-full p-4 rounded-2xl border-none shadow-sm text-sm" placeholder="상세 설명을 적어주세요 (선택)">
-          <button id="submitBtn" onclick="executeStamp()" class="w-full py-5 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2">
-            <span id="btnText"></span>
-          </button>
         </div>
         
         <div class="flex gap-2">
@@ -369,18 +369,10 @@
   </div>
 
   <div id="levelModal" class="modal" onclick="closeModalOnBg(event, 'levelModal')">
-    <div class="modal-content p-6 space-y-4 text-center">
-      <h3 class="font-black text-xl text-indigo-600 border-b pb-3">🏅 라이벌 레벨 안내</h3>
-      <div class="text-sm font-bold space-y-3 text-slate-600 text-left px-4">
-        <p>🌱 0~50점: 신입 라이벌</p>
-        <p>🌟 51~100점: 유망주</p>
-        <p>⚔️ 101~150점: 베테랑</p>
-        <p>🏅 151~200점: 엘리트</p>
-        <p>👑 201~250점: 마스터</p>
-        <p>🔥 251~300점: 전설의 라이벌</p>
-        <p class="text-indigo-500">🏆 301점~: 월드 챔피언</p>
-      </div>
-      <button onclick="closeModal('levelModal')" class="w-full py-3 bg-slate-200 rounded-xl font-black text-slate-500 active:scale-95 transition">닫기</button>
+    <div class="modal-content p-6 space-y-4 text-center overflow-hidden flex flex-col h-[75vh]">
+      <h3 class="font-black text-xl text-indigo-600 border-b pb-3 shrink-0">🏅 라이벌 레벨 안내</h3>
+      <div id="levelListContainer" class="text-sm font-bold space-y-2 text-slate-600 text-left px-2 overflow-y-auto flex-1"></div>
+      <button onclick="closeModal('levelModal')" class="w-full py-3 bg-slate-200 rounded-xl font-black text-slate-500 active:scale-95 transition shrink-0">닫기</button>
     </div>
   </div>
 
@@ -601,12 +593,25 @@
       const p = n => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
     }
+    // 🏅 레벨 호칭 목록 (스티커 50개마다 승급). 301점(월드 챔피언) 이후부터는
+    // 삼국지 무력 순위 TOP 30 장수 이름을 순서대로 붙여서 계속 성장하는 재미를 줍니다.
+    // (무력 순위는 여러 게임/자료마다 조금씩 다를 수 있어 대중적으로 널리 알려진 순서를 참고했어요)
+    const TITLE_TIERS = [
+      {min:0,name:"신입 라이벌 🌱"},{min:51,name:"유망주 🌟"},{min:101,name:"베테랑 ⚔️"},
+      {min:151,name:"엘리트 🏅"},{min:201,name:"마스터 👑"},{min:251,name:"전설의 라이벌 🔥"},{min:301,name:"월드 챔피언 🏆"},
+      {min:351,name:"이전 장수 🗡️"},{min:401,name:"왕쌍 장수 🗡️"},{min:451,name:"화웅 장수 🗡️"},
+      {min:501,name:"관평 장수 🗡️"},{min:551,name:"마대 장수 🗡️"},{min:601,name:"조홍 장수 🗡️"},
+      {min:651,name:"조인 장수 🗡️"},{min:701,name:"능통 장수 🗡️"},{min:751,name:"주태 장수 🗡️"},
+      {min:801,name:"우금 장수 🗡️"},{min:851,name:"악진 맹장 🛡️"},{min:901,name:"하후연 맹장 🛡️"},
+      {min:951,name:"위연 맹장 🛡️"},{min:1001,name:"손책 맹장 🛡️"},{min:1051,name:"하후돈 맹장 🛡️"},
+      {min:1101,name:"장합 맹장 🛡️"},{min:1151,name:"서황 맹장 🛡️"},{min:1201,name:"안량 맹장 🛡️"},
+      {min:1251,name:"문추 맹장 🛡️"},{min:1301,name:"감녕 맹장 🛡️"},{min:1351,name:"태사자 용장 ⚔️"},
+      {min:1401,name:"방덕 용장 ⚔️"},{min:1451,name:"황충 용장 ⚔️"},{min:1501,name:"허저 용장 ⚔️"},
+      {min:1551,name:"전위 용장 ⚔️"},{min:1601,name:"조운 대장군 🔥⚔️"},{min:1651,name:"마초 대장군 🔥⚔️"},
+      {min:1701,name:"장비 대장군 🔥⚔️"},{min:1751,name:"관우 대장군 🔥⚔️"},{min:1801,name:"여포 - 최강 무신 🐉👑"}
+    ];
     function titleForScore(score) {
-      const titles = [
-        {min:0,name:"신입 라이벌 🌱"},{min:51,name:"유망주 🌟"},{min:101,name:"베테랑 ⚔️"},
-        {min:151,name:"엘리트 🏅"},{min:201,name:"마스터 👑"},{min:251,name:"전설의 라이벌 🔥"},{min:301,name:"월드 챔피언 🏆"}
-      ];
-      return [...titles].reverse().find(t => score >= t.min).name;
+      return [...TITLE_TIERS].reverse().find(t => score >= t.min).name;
     }
 
     async function getStateDoc() {
@@ -2262,6 +2267,26 @@
       .undoLastStamps(app.currentBoard.round, undoRows, currentRole);
     }
     function openModal(id) { vibrate(); document.getElementById(id).classList.add('active'); }
+
+    // 🏅 지금 점수 기준으로 현재 달성한 단계를 강조하며 전체 레벨 목록을 그려줍니다.
+    function openLevelModal() {
+      const score = app.lifetimeScore || 0;
+      const container = document.getElementById('levelListContainer');
+      const rows = TITLE_TIERS.map((t, i) => {
+        const nextMin = (i < TITLE_TIERS.length - 1) ? TITLE_TIERS[i + 1].min : null;
+        const isCurrent = score >= t.min && (nextMin === null || score < nextMin);
+        const rangeText = nextMin !== null ? `${t.min}~${nextMin - 1}점` : `${t.min}점~`;
+        const cls = isCurrent ? 'bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2' : 'px-3 py-1';
+        return `<p class="${cls}">${isCurrent ? '👉 ' : ''}${t.name} <span class="text-xs text-slate-400 font-normal">(${rangeText})</span></p>`;
+      });
+      container.innerHTML = rows.join('');
+      openModal('levelModal');
+      setTimeout(() => {
+        const current = container.querySelector('.bg-indigo-50');
+        if (current) current.scrollIntoView({ block: 'center' });
+      }, 50);
+    }
+
     function closeModal(id) { vibrate(); document.getElementById(id).classList.remove('active'); }
     function closeModalOnBg(e, id) { if(e.target.id === id && modalPointerDownTarget && modalPointerDownTarget.id === id) closeModal(id); }
     function showToast(m) { vibrate(10); const t = document.getElementById('toast'); t.innerText = m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
@@ -2476,7 +2501,7 @@
       if (isCreatingBoard) return;
       vibrate();
       const target = prompt('새 칭찬판의 목표 개수:', '30'); if(!target) return;
-      const reward = prompt('이번 목표 달성 보상:', '보상 입력'); if(!reward) return;
+      const reward = prompt('이번 목표 달성 보상:', '게임 30분'); if(!reward) return;
       isCreatingBoard = true;
       google.script.run
         .withSuccessHandler(res => { app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); renderBoard(); showToast("새 칭찬판이 시작되었습니다! ✨"); isCreatingBoard = false; })
@@ -2662,10 +2687,32 @@
       }).join('');
     }
 
+    // 🎰 가장 최근에 등록해둔 럭키박스 내용을 찾습니다: 지금 회차에 이미 등록된 게 있으면 그중 마지막 것,
+    // 없으면 과거 회차 중 가장 최근에 럭키박스를 등록했던 회차의 마지막 항목을 씁니다.
+    function getMostRecentLuckyText() {
+      const curBoxes = getLuckyBoxes();
+      if (curBoxes.length > 0) return curBoxes[curBoxes.length - 1].text;
+      const pastBoards = (app.boards || [])
+        .filter(b => b.round < app.currentBoard.round && Array.isArray(b.luckyBoxes) && b.luckyBoxes.length > 0)
+        .sort((a, b) => b.round - a.round);
+      if (pastBoards.length > 0) {
+        const boxes = pastBoards[0].luckyBoxes;
+        return boxes[boxes.length - 1].text;
+      }
+      return '';
+    }
+
     function resetLuckyBoxForm() {
       editingLuckyBoxStep = null;
       document.getElementById('luckyBoxFormTitle').innerText = '새 럭키박스 추가';
-      document.getElementById('luckyBoxTextarea').value = '';
+      const recentText = getMostRecentLuckyText();
+      if (recentText) {
+        const prizes = normalizeLuckyText(recentText);
+        const lines = prizes.map(p => (p.ratio !== null && p.ratio !== undefined) ? `${p.name}:${p.ratio}` : p.name);
+        document.getElementById('luckyBoxTextarea').value = lines.join('\n');
+      } else {
+        document.getElementById('luckyBoxTextarea').value = '';
+      }
       document.getElementById('btnSaveLucky').innerText = '추가하기';
       document.getElementById('btnCancelLuckyEdit').classList.add('hidden');
       populateLuckyStepSelect();
