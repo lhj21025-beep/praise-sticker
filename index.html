@@ -541,6 +541,20 @@
     </div>
   </div>
 
+  <!-- 🔔 부모 접속 시 자동으로 뜨는 알림 팝업: 아이가 룰렛을 돌리거나 보관함 아이템을 쓰면 여기 쌓입니다. -->
+  <div id="notifyPopupModal" class="modal" style="z-index:400;">
+    <div class="modal-content p-6 space-y-4">
+      <div class="flex items-center gap-2">
+        <h3 class="font-black text-xl text-amber-600">🔔 새 소식이 있어요!</h3>
+      </div>
+      <ul id="notifyPopupList" class="space-y-2 max-h-72 overflow-y-auto"></ul>
+      <div class="flex gap-2">
+        <button onclick="closeModal('notifyPopupModal')" class="px-4 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl active:scale-95 transition">나중에</button>
+        <button onclick="dismissAllNotificationsUI()" class="flex-1 py-4 bg-amber-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">확인했어요</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast">메시지</div>
   <div id="undoBar">
     <div class="text-sm"><p class="font-black">도장 쾅! 완료</p><p class="text-[10px] text-slate-400">잘못 찍었다면 취소하세요</p></div>
@@ -711,17 +725,23 @@
 
       // 🙋 부모 화면에서만 대기 중인 칭찬 요청을 함께 불러옵니다.
       let pendingRequests = [];
+      // 🔔 부모 화면에서만 대기 중인 알림(룰렛 당첨/아이템 사용)도 함께 불러옵니다.
+      let pendingNotifications = [];
       if (isParent) {
         const reqSnap = await db.collection('requests').where('status','==','대기 중').get();
         reqSnap.forEach(d => { const r = d.data(); pendingRequests.push({ id: d.id, reason: r.reason, detail: r.detail || '', childName: r.childName, date: fmtShort(r.date) }); });
         pendingRequests.sort((a,b) => a.date < b.date ? -1 : 1);
+
+        const notifSnap = await db.collection('notifications').where('status','==','대기 중').get();
+        notifSnap.forEach(d => { const n = d.data(); pendingNotifications.push({ id: d.id, kind: n.kind, text: n.text, childName: n.childName || '', date: fmtShort(n.date) }); });
+        pendingNotifications.sort((a,b) => a.date < b.date ? -1 : 1);
       }
 
       return {
         userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
         boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
         praiseCounts, bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
-        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests
+        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications
       };
     }
 
@@ -894,6 +914,7 @@
       await ensureAuth();
       const ref = db.collection('items').doc(itemId);
       const snap = await ref.get();
+      let usedNameFinal = '';
       if (snap.exists && snap.data().status === '사용 전') {
         const it = snap.data();
         let usedName = it.name;
@@ -904,11 +925,16 @@
           await db.collection('items').add({ round: it.round, name: remainName, obtainedDate: it.obtainedDate, status:'사용 전', usedDate:'', type: it.type });
         }
         await ref.update({ name: usedName, status:'사용 후', usedDate: new Date().toISOString() });
+        usedNameFinal = usedName;
+      }
+      // 🔔 아이템 사용 알림: 부모가 다음에 접속하면 팝업으로 보여줍니다.
+      if (usedNameFinal) {
+        await db.collection('notifications').add({ kind: 'item_use', text: `🎒 사용: ${usedNameFinal}`, childName: childName || '', date: new Date().toISOString(), status: '대기 중' });
       }
       return getAppData(null, 'child');
     }
 
-    async function saveRouletteResult(ticketId, wonPrize) {
+    async function saveRouletteResult(ticketId, wonPrize, childName) {
       await ensureAuth();
       const ref = db.collection('items').doc(ticketId);
       const snap = await ref.get();
@@ -918,7 +944,18 @@
         await ref.update({ status:'사용 후', usedDate: new Date().toISOString() });
       }
       if (round) await db.collection('items').add({ round, name: wonPrize, obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스' });
+      // 🔔 룰렛 당첨 알림: 부모가 다음에 접속하면 팝업으로 보여줍니다.
+      await db.collection('notifications').add({ kind: 'roulette', text: `🎰 룰렛 당첨: ${wonPrize}`, childName: childName || '', date: new Date().toISOString(), status: '대기 중' });
       return getAppData(null, 'child');
+    }
+
+    async function dismissAllNotifications(role) {
+      await ensureAuth();
+      const snap = await db.collection('notifications').where('status','==','대기 중').get();
+      const batch = db.batch();
+      snap.forEach(d => batch.update(d.ref, { status: '확인함' }));
+      await batch.commit();
+      return getAppData(null, role);
     }
 
     // 🎁 럭키박스 전체 배열을 통째로 저장합니다. luckyBoxesJson: JSON.stringify([{step, text}, ...])
@@ -1209,7 +1246,7 @@
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
-      getReportStats, dismissRequest, backfillRoundDurations
+      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications
     };
 
     function __makeRunner() {
@@ -1515,9 +1552,40 @@
         document.getElementById('lifetimeScore').innerText = `${app.lifetimeScore} pts`;
         document.getElementById('levelBar').style.width = `${(app.lifetimeScore % 50) * 2}%`;
         renderBoard();
+        // 🔔 부모가 접속했을 때, 그 사이 아이가 룰렛을 돌리거나 아이템을 썼다면 팝업으로 바로 알려줍니다.
+        if (app.isParent && app.pendingNotifications && app.pendingNotifications.length > 0) {
+          openNotifyPopup(app.pendingNotifications);
+        }
       } catch (e) {
         showLoadErrorScreen('화면을 그리는 중 오류가 발생했어요: ' + e.message);
       }
+    }
+
+    // 🔔 알림 팝업 열기 + 확인 처리
+    function openNotifyPopup(notifications) {
+      const list = document.getElementById('notifyPopupList');
+      list.innerHTML = notifications.map(n => `
+        <li class="bg-amber-50 border border-amber-100 rounded-xl p-3">
+          <p class="font-bold text-sm text-slate-700">${n.text}</p>
+          <p class="text-[10px] text-slate-400 font-bold mt-1">${n.childName} · ${n.date}</p>
+        </li>
+      `).join('');
+      document.getElementById('notifyPopupModal').classList.add('active');
+    }
+
+    let isDismissingNotifications = false;
+    function dismissAllNotificationsUI() {
+      if (isDismissingNotifications) return;
+      isDismissingNotifications = true;
+      vibrate();
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          closeModal('notifyPopupModal');
+          isDismissingNotifications = false;
+        })
+        .withFailureHandler(err => { showToast("오류: " + err.message); isDismissingNotifications = false; })
+        .dismissAllNotifications(currentRole);
     }
 
     function showLoadErrorScreen(message) {
@@ -2975,7 +3043,7 @@
           google.script.run
             .withSuccessHandler(res => { app = res; closeModal('rouletteModal'); showToast("보관함 보관 완료! 🎁"); renderBoard(); })
             .withFailureHandler(err => alert("에러: " + err.message))
-            .saveRouletteResult(currentRouletteTicketId, wonPrize);
+            .saveRouletteResult(currentRouletteTicketId, wonPrize, app.userName);
         }, 2000);
       }, spinTimeTotal);
     }
