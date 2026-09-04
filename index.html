@@ -555,6 +555,17 @@
     </div>
   </div>
 
+  <!-- ✋ 칭찬 이력을 길게 누르면 뜨는 수정/삭제 메뉴 -->
+  <div id="logActionModal" class="modal" style="z-index:260;" onclick="closeModalOnBg(event, 'logActionModal')">
+    <div class="modal-content p-6 space-y-3">
+      <h3 class="font-black text-lg text-center text-slate-700">기록 관리</h3>
+      <p id="logActionInfo" class="text-xs text-center text-slate-400 font-bold"></p>
+      <button onclick="editSelectedLog()" class="w-full py-3 bg-amber-500 text-white font-black rounded-xl active:scale-95 transition">✏️ 수정하기</button>
+      <button onclick="deleteSelectedLog()" class="w-full py-3 bg-red-500 text-white font-black rounded-xl active:scale-95 transition">🗑️ 삭제하기</button>
+      <button onclick="closeModal('logActionModal')" class="w-full py-3 bg-slate-100 text-slate-500 font-black rounded-xl active:scale-95 transition">취소</button>
+    </div>
+  </div>
+
   <div id="toast">메시지</div>
   <div id="undoBar">
     <div class="text-sm"><p class="font-black">도장 쾅! 완료</p><p class="text-[10px] text-slate-400">잘못 찍었다면 취소하세요</p></div>
@@ -875,6 +886,25 @@
             await ref.delete();
           }
         }
+      }
+      return getAppData(round, role);
+    }
+
+    // ✏️ 이력 한 건의 사유/상세설명/개수를 직접 수정합니다. (잘못 등록된 기록을 바로잡는 용도)
+    // 개수가 바뀌면 그 차이만큼 누적 점수(lifetimeScore)도 함께 보정합니다.
+    async function updateLogEntry(logId, round, newReason, newDetail, newScore, role) {
+      await ensureAuth();
+      const ref = db.collection('logs').doc(logId);
+      const snap = await ref.get();
+      if (!snap.exists) return getAppData(round, role);
+      const l = snap.data();
+      const oldScore = Number(l.score);
+      const oldContribution = (l.executor !== '시스템' && oldScore > 0) ? oldScore : 0;
+      const newContribution = (l.executor !== '시스템' && newScore > 0) ? newScore : 0;
+      const delta = newContribution - oldContribution;
+      await ref.update({ reason: newReason, detail: newDetail || '', score: newScore });
+      if (delta !== 0) {
+        await db.collection('meta').doc('state').update({ lifetimeScore: firebase.firestore.FieldValue.increment(delta) });
       }
       return getAppData(round, role);
     }
@@ -1246,7 +1276,7 @@
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
-      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications
+      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, updateLogEntry
     };
 
     function __makeRunner() {
@@ -3191,7 +3221,9 @@
     function renderLogs() {
       const list = document.getElementById('logList');
       list.innerHTML = app.logs.length === 0 ? '<li class="text-center text-slate-400 py-4">기록이 없습니다.</li>' : app.logs.map(log => `
-        <li class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-3 ${log.pending ? 'opacity-60' : ''}">
+        <li class="log-item bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-3 ${log.pending ? 'opacity-60' : ''}"
+            data-log-id="${log.pending ? '' : log.id}" data-pending="${log.pending ? 'true' : 'false'}"
+            data-reason="${(log.reason||'').replace(/"/g, '&quot;')}" data-detail="${(log.detail||'').replace(/"/g, '&quot;')}" data-raw-score="${log.rawScore}">
           <div class="mt-1 bg-indigo-100 text-indigo-600 font-black text-xs px-2 py-1 rounded-lg whitespace-nowrap shrink-0">
             ${log.runningTotal}칸
           </div>
@@ -3205,6 +3237,80 @@
           </div>
         </li>
       `).join('');
+    }
+
+    // ✋ 이력을 길게 누르면 수정/삭제 메뉴를 엽니다. (저장 중인 낙관적 업데이트 항목은 실제 ID가 아직 없어서 제외)
+    let logPressTimer = null, logIsPressing = false, logStartY = 0;
+    let selectedLogId = null, selectedLogReason = '', selectedLogDetail = '', selectedLogRawScore = 0;
+
+    function initLogLongPress() {
+      const list = document.getElementById('logList');
+      if (!list || list.dataset.longPressInit) return;
+      list.dataset.longPressInit = '1';
+      list.addEventListener('touchstart', function(e) {
+        const item = e.target.closest('.log-item');
+        if (!item || item.dataset.pending === 'true' || !item.dataset.logId) return;
+        logIsPressing = true; logStartY = e.touches[0].clientY;
+        logPressTimer = setTimeout(() => {
+          if (logIsPressing) {
+            if (navigator.vibrate) navigator.vibrate(50);
+            openLogActionModal(item.dataset.logId, item.dataset.reason, item.dataset.detail, parseInt(item.dataset.rawScore, 10));
+            logIsPressing = false;
+          }
+        }, 500);
+      }, { passive: true });
+      list.addEventListener('touchend', () => { logIsPressing = false; clearTimeout(logPressTimer); }, { passive: true });
+      list.addEventListener('touchmove', function(e) {
+        if (Math.abs(e.touches[0].clientY - logStartY) > 10) { logIsPressing = false; clearTimeout(logPressTimer); }
+      }, { passive: true });
+    }
+    initLogLongPress();
+
+    function openLogActionModal(logId, reason, detail, rawScore) {
+      selectedLogId = logId; selectedLogReason = reason; selectedLogDetail = detail; selectedLogRawScore = rawScore;
+      document.getElementById('logActionInfo').innerText = `${reason}${detail ? ' · ' + detail : ''} (${rawScore > 0 ? '+' : ''}${rawScore})`;
+      openModal('logActionModal');
+    }
+
+    function editSelectedLog() {
+      vibrate();
+      closeModal('logActionModal');
+      const newReason = prompt('사유를 입력하세요:', selectedLogReason);
+      if (newReason === null) return;
+      const newDetail = prompt('상세 설명을 입력하세요 (없으면 빈칸):', selectedLogDetail);
+      if (newDetail === null) return;
+      const scoreStr = prompt('스티커 개수(도장 개수)를 입력하세요. 차감이면 마이너스로 입력하세요 (예: -1):', String(selectedLogRawScore));
+      if (scoreStr === null) return;
+      const newScore = parseInt(scoreStr, 10);
+      if (isNaN(newScore)) { showToast('숫자를 정확히 입력해주세요.'); return; }
+      showSyncIndicator('수정 중...');
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
+          renderBoard();
+          hideSyncIndicator();
+          showToast('기록이 수정됐어요! ✏️');
+        })
+        .withFailureHandler(err => { showSyncError('오류: ' + err.message); })
+        .updateLogEntry(selectedLogId, app.currentBoard.round, newReason.trim(), newDetail.trim(), newScore, currentRole);
+    }
+
+    function deleteSelectedLog() {
+      vibrate();
+      if (!confirm('이 기록을 삭제할까요? (차감이 아니라 잘못 등록된 기록을 지우는 거예요)')) { return; }
+      closeModal('logActionModal');
+      showSyncIndicator('삭제 중...');
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
+          renderBoard();
+          hideSyncIndicator();
+          showToast('기록을 삭제했어요. 🗑️');
+        })
+        .withFailureHandler(err => { showSyncError('오류: ' + err.message); })
+        .undoLastStamps(app.currentBoard.round, [selectedLogId], currentRole);
     }
   </script>
 </body>
