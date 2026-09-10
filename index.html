@@ -294,6 +294,17 @@
         <button onclick="openEditBoardModal()" class="bg-slate-50 text-slate-600 py-3 rounded-2xl text-[11px] font-black border border-slate-200 active:scale-95 transition">⚙️ 판 관리</button>
         <button onclick="openReportModal()" class="bg-blue-50 text-blue-600 py-3 rounded-2xl text-[11px] font-black border border-blue-100 active:scale-95 transition">📈 리포트</button>
       </div>
+
+      <!-- 🎮 주말(토/일)에만 보이는 게임시간 정산 카드: 하루 60분 중 안 쓴 시간을 보관함에 이월 저장합니다. -->
+      <div id="gameTimeCard" class="hidden mt-4 bg-sky-50 border border-sky-200 rounded-2xl p-4">
+        <div class="flex justify-between items-center gap-3">
+          <div class="min-w-0">
+            <p class="text-xs font-black text-sky-600">🎮 오늘 게임시간 정산 (하루 60분)</p>
+            <p id="gameTimeStatusText" class="text-[11px] text-slate-500 font-bold mt-0.5 truncate">아직 정산 안 했어요</p>
+          </div>
+          <button id="btnGameSettle" onclick="settleGameTimeUI()" class="shrink-0 px-4 py-2 bg-sky-500 text-white text-xs font-black rounded-xl active:scale-95 transition">정산하기</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -738,6 +749,8 @@
       let pendingRequests = [];
       // 🔔 부모 화면에서만 대기 중인 알림(룰렛 당첨/아이템 사용)도 함께 불러옵니다.
       let pendingNotifications = [];
+      // 🎮 부모 화면에서만 오늘 게임시간 정산 여부를 함께 불러옵니다.
+      let todayGameSettlement = null;
       if (isParent) {
         const reqSnap = await db.collection('requests').where('status','==','대기 중').get();
         reqSnap.forEach(d => { const r = d.data(); pendingRequests.push({ id: d.id, reason: r.reason, detail: r.detail || '', childName: r.childName, date: fmtShort(r.date) }); });
@@ -746,13 +759,17 @@
         const notifSnap = await db.collection('notifications').where('status','==','대기 중').get();
         notifSnap.forEach(d => { const n = d.data(); pendingNotifications.push({ id: d.id, kind: n.kind, text: n.text, childName: n.childName || '', date: fmtShort(n.date) }); });
         pendingNotifications.sort((a,b) => a.date < b.date ? -1 : 1);
+
+        const todayStr2 = localDateStr(new Date().toISOString());
+        const settleSnap = await db.collection('gameSettlements').doc(todayStr2).get();
+        todayGameSettlement = settleSnap.exists ? settleSnap.data() : null;
       }
 
       return {
         userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
         boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
         praiseCounts, bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
-        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications
+        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications, todayGameSettlement
       };
     }
 
@@ -986,6 +1003,37 @@
       snap.forEach(d => batch.update(d.ref, { status: '확인함' }));
       await batch.commit();
       return getAppData(null, role);
+    }
+
+    // 🎮 주말 게임시간 정산: 하루 60분 기준으로 안 쓴 만큼을 보관함에 "게임 N분 (이월)" 아이템으로 저장합니다.
+    // 같은 날 다시 정산하면(실수 정정용) 이전에 만들어뒀던 이월 아이템 중 아직 안 쓴 것만 지우고 새로 만듭니다.
+    async function settleGameTime(round, playedMinutes, role) {
+      await ensureAuth();
+      const dateStr = localDateStr(new Date().toISOString());
+      const budget = 60;
+      const played = Math.max(0, Math.min(budget, Number(playedMinutes) || 0));
+      const banked = budget - played;
+
+      const ref = db.collection('gameSettlements').doc(dateStr);
+      const existing = await ref.get();
+      if (existing.exists && existing.data().itemId) {
+        const oldItemRef = db.collection('items').doc(existing.data().itemId);
+        const oldItemSnap = await oldItemRef.get();
+        if (oldItemSnap.exists && oldItemSnap.data().status === '사용 전') {
+          await oldItemRef.delete();
+        }
+      }
+
+      let itemId = null;
+      if (banked > 0) {
+        const itemDoc = await db.collection('items').add({
+          round: round || null, name: `게임 ${banked}분 (이월)`, obtainedDate: new Date().toISOString(),
+          status: '사용 전', usedDate: '', type: '보상'
+        });
+        itemId = itemDoc.id;
+      }
+      await ref.set({ date: dateStr, playedMinutes: played, bankedMinutes: banked, itemId, settledAt: new Date().toISOString() });
+      return getAppData(round, role);
     }
 
     // 🎁 럭키박스 전체 배열을 통째로 저장합니다. luckyBoxesJson: JSON.stringify([{step, text}, ...])
@@ -1276,7 +1324,7 @@
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
-      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, updateLogEntry
+      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, updateLogEntry, settleGameTime
     };
 
     function __makeRunner() {
@@ -1676,8 +1724,53 @@
         reqBanner.classList.add('hidden');
       }
 
+      renderGameTimeCard();
       renderTheme();
       renderLogs();
+    }
+
+    // 🎮 주말에만 보이는 게임시간 정산 카드 갱신
+    function renderGameTimeCard() {
+      const card = document.getElementById('gameTimeCard');
+      if (!card) return;
+      const now = new Date();
+      const isWeekend = (now.getDay() === 0 || now.getDay() === 6);
+      if (!app.isParent || !isWeekend) { card.classList.add('hidden'); return; }
+      card.classList.remove('hidden');
+      const statusText = document.getElementById('gameTimeStatusText');
+      const btn = document.getElementById('btnGameSettle');
+      const settlement = app.todayGameSettlement;
+      if (settlement) {
+        statusText.innerText = `오늘 ${settlement.playedMinutes}분 플레이 · ${settlement.bankedMinutes}분 이월 완료`;
+        btn.innerText = '다시 정산';
+      } else {
+        statusText.innerText = '아직 정산 안 했어요 (하루 60분 기준)';
+        btn.innerText = '정산하기';
+      }
+    }
+
+    let isSettlingGameTime = false;
+    function settleGameTimeUI() {
+      if (isSettlingGameTime) return;
+      vibrate();
+      const defaultVal = app.todayGameSettlement ? String(app.todayGameSettlement.playedMinutes) : '0';
+      const playedStr = prompt('오늘 게임 몇 분 했어? (0~60 사이 숫자, 안 하면 0)', defaultVal);
+      if (playedStr === null) return;
+      const played = parseInt(playedStr, 10);
+      if (isNaN(played) || played < 0) { showToast('0 이상의 숫자를 입력해주세요.'); return; }
+      isSettlingGameTime = true;
+      showSyncIndicator('정산 중...');
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res;
+          renderGameTimeCard();
+          hideSyncIndicator();
+          const banked = Math.max(0, 60 - Math.min(60, played));
+          showToast(banked > 0 ? `${banked}분이 보관함에 저장됐어요! 🎮` : '오늘은 이월할 시간이 없어요.');
+          isSettlingGameTime = false;
+        })
+        .withFailureHandler(err => { showSyncError('오류: ' + err.message); isSettlingGameTime = false; })
+        .settleGameTime(app.currentBoard.round, played, currentRole);
     }
 
     // 🙋 요청함 모달 열기/렌더링
