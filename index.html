@@ -295,14 +295,28 @@
         <button onclick="openReportModal()" class="bg-blue-50 text-blue-600 py-3 rounded-2xl text-[11px] font-black border border-blue-100 active:scale-95 transition">📈 리포트</button>
       </div>
 
-      <!-- 🎮 주말(토/일)에만 보이는 게임시간 정산 카드: 하루 60분 중 안 쓴 시간을 보관함에 이월 저장합니다. -->
+      <!-- 🎮 평일에도 확인 가능한 주말 게임시간 이월 카드 -->
       <div id="gameTimeCard" class="hidden mt-4 bg-sky-50 border border-sky-200 rounded-2xl p-4">
-        <div class="flex justify-between items-center gap-3">
-          <div class="min-w-0">
-            <p class="text-xs font-black text-sky-600">🎮 오늘 게임시간 정산 (하루 60분)</p>
-            <p id="gameTimeStatusText" class="text-[11px] text-slate-500 font-bold mt-0.5 truncate">아직 정산 안 했어요</p>
+        <div class="mb-3">
+          <p class="text-xs font-black text-sky-600">🎮 주말 게임시간 이월</p>
+          <p class="text-[11px] text-slate-500 font-bold mt-0.5">토·일 각 60분 · 평일에도 최근 주말을 정산/수정할 수 있어요</p>
+          <p id="gameRolloverBalanceText" class="text-[11px] text-sky-700 font-black mt-1">남은 이월 게임시간 0분</p>
+        </div>
+        <div class="space-y-2">
+          <div class="flex justify-between items-center gap-3 bg-white/80 border border-sky-100 rounded-xl p-3">
+            <div class="min-w-0">
+              <p id="gameSatLabel" class="text-xs font-black text-slate-700">토요일</p>
+              <p id="gameSatStatus" class="text-[11px] text-slate-500 font-bold mt-0.5">불러오는 중...</p>
+            </div>
+            <button id="btnGameSettleSat" onclick="settleGameTimeUI('saturday')" class="shrink-0 px-3 py-2 bg-sky-500 text-white text-xs font-black rounded-xl active:scale-95 transition">정산</button>
           </div>
-          <button id="btnGameSettle" onclick="settleGameTimeUI()" class="shrink-0 px-4 py-2 bg-sky-500 text-white text-xs font-black rounded-xl active:scale-95 transition">정산하기</button>
+          <div class="flex justify-between items-center gap-3 bg-white/80 border border-sky-100 rounded-xl p-3">
+            <div class="min-w-0">
+              <p id="gameSunLabel" class="text-xs font-black text-slate-700">일요일</p>
+              <p id="gameSunStatus" class="text-[11px] text-slate-500 font-bold mt-0.5">불러오는 중...</p>
+            </div>
+            <button id="btnGameSettleSun" onclick="settleGameTimeUI('sunday')" class="shrink-0 px-3 py-2 bg-sky-500 text-white text-xs font-black rounded-xl active:scale-95 transition">정산</button>
+          </div>
         </div>
       </div>
     </div>
@@ -629,6 +643,30 @@
       const p = n => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
     }
+
+    // 🎮 게임시간 이월에서 보여줄 "관련 주말"을 계산합니다.
+    // 토요일/일요일에는 해당 주말, 월~금에는 가장 최근에 끝난 주말(직전 토/일)을 사용합니다.
+    function getRelevantWeekendDates(baseDate = new Date()) {
+      const base = new Date(baseDate);
+      base.setHours(12, 0, 0, 0);
+      const day = base.getDay();
+      const saturday = new Date(base);
+      if (day === 0) saturday.setDate(base.getDate() - 1);
+      else if (day !== 6) saturday.setDate(base.getDate() - (day + 1));
+      const sunday = new Date(saturday);
+      sunday.setDate(saturday.getDate() + 1);
+      return {
+        saturday: localDateStr(saturday.toISOString()),
+        sunday: localDateStr(sunday.toISOString())
+      };
+    }
+
+    function gameMinutesFromItem(item) {
+      if (!item) return 0;
+      if (Number.isFinite(Number(item.gameMinutes))) return Math.max(0, Number(item.gameMinutes));
+      const m = String(item.name || '').match(/게임\s*(\d+)\s*분.*이월/);
+      return m ? Math.max(0, Number(m[1]) || 0) : 0;
+    }
     // 🏅 레벨 호칭 목록 (스티커 50개마다 승급). 301점(월드 챔피언) 이후부터는
     // 삼국지 무력 순위 TOP 30 장수 이름을 순서대로 붙여서 계속 성장하는 재미를 줍니다.
     // (무력 순위는 여러 게임/자료마다 조금씩 다를 수 있어 대중적으로 널리 알려진 순서를 참고했어요)
@@ -734,7 +772,7 @@
 
       const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
       let items = [];
-      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot }); });
+      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0 }); });
 
       const wishesSnap = await db.collection('wishes').orderBy('date','desc').get();
       let wishes = [];
@@ -749,8 +787,8 @@
       let pendingRequests = [];
       // 🔔 부모 화면에서만 대기 중인 알림(룰렛 당첨/아이템 사용)도 함께 불러옵니다.
       let pendingNotifications = [];
-      // 🎮 부모 화면에서만 오늘 게임시간 정산 여부를 함께 불러옵니다.
-      let todayGameSettlement = null;
+      // 🎮 부모 화면에는 주말이 지나도 최근 토/일 게임시간 정산 상태를 보여줍니다.
+      let gameWeekendSettlements = null;
       if (isParent) {
         const reqSnap = await db.collection('requests').where('status','==','대기 중').get();
         reqSnap.forEach(d => { const r = d.data(); pendingRequests.push({ id: d.id, reason: r.reason, detail: r.detail || '', childName: r.childName, date: fmtShort(r.date) }); });
@@ -760,16 +798,25 @@
         notifSnap.forEach(d => { const n = d.data(); pendingNotifications.push({ id: d.id, kind: n.kind, text: n.text, childName: n.childName || '', date: fmtShort(n.date) }); });
         pendingNotifications.sort((a,b) => a.date < b.date ? -1 : 1);
 
-        const todayStr2 = localDateStr(new Date().toISOString());
-        const settleSnap = await db.collection('gameSettlements').doc(todayStr2).get();
-        todayGameSettlement = settleSnap.exists ? settleSnap.data() : null;
+        const weekendDates = getRelevantWeekendDates(new Date());
+        const [satSnap, sunSnap] = await Promise.all([
+          db.collection('gameSettlements').doc(weekendDates.saturday).get(),
+          db.collection('gameSettlements').doc(weekendDates.sunday).get()
+        ]);
+        gameWeekendSettlements = {
+          today: localDateStr(new Date().toISOString()),
+          saturdayDate: weekendDates.saturday,
+          sundayDate: weekendDates.sunday,
+          saturday: satSnap.exists ? satSnap.data() : null,
+          sunday: sunSnap.exists ? sunSnap.data() : null
+        };
       }
 
       return {
         userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
         boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
         praiseCounts, bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
-        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications, todayGameSettlement
+        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications, gameWeekendSettlements
       };
     }
 
@@ -965,13 +1012,25 @@
       if (snap.exists && snap.data().status === '사용 전') {
         const it = snap.data();
         let usedName = it.name;
+        const isGameRollover = !!it.gameRollover || /게임\s*\d+\s*분.*이월/.test(String(it.name || ''));
         if (useAmount && maxAmount && useAmount < maxAmount) {
           usedName = it.name.replace(String(maxAmount), String(useAmount));
           const remainAmount = maxAmount - useAmount;
           const remainName = it.name.replace(String(maxAmount), String(remainAmount));
-          await db.collection('items').add({ round: it.round, name: remainName, obtainedDate: it.obtainedDate, status:'사용 전', usedDate:'', type: it.type });
+          await db.collection('items').add({
+            round: it.round, name: remainName, obtainedDate: it.obtainedDate,
+            status:'사용 전', usedDate:'', type: it.type,
+            ...(isGameRollover ? {
+              gameRollover: true,
+              gameSettlementDate: it.gameSettlementDate || '',
+              gameMinutes: remainAmount
+            } : {})
+          });
         }
-        await ref.update({ name: usedName, status:'사용 후', usedDate: new Date().toISOString() });
+        await ref.update({
+          name: usedName, status:'사용 후', usedDate: new Date().toISOString(),
+          ...(isGameRollover && useAmount ? { gameRollover: true, gameMinutes: useAmount } : {})
+        });
         usedNameFinal = usedName;
       }
       // 🔔 아이템 사용 알림: 부모가 다음에 접속하면 팝업으로 보여줍니다.
@@ -1005,34 +1064,70 @@
       return getAppData(null, role);
     }
 
-    // 🎮 주말 게임시간 정산: 하루 60분 기준으로 안 쓴 만큼을 보관함에 "게임 N분 (이월)" 아이템으로 저장합니다.
-    // 같은 날 다시 정산하면(실수 정정용) 이전에 만들어뒀던 이월 아이템 중 아직 안 쓴 것만 지우고 새로 만듭니다.
-    async function settleGameTime(round, playedMinutes, role) {
+    // 🎮 토/일 게임시간 정산: 각 60분 중 쓰지 않은 시간을 보관함으로 이월합니다.
+    // 평일에도 최근 주말을 정산/수정할 수 있으며, 분할 사용된 이월분은 사용 이력을 유지한 채 남은 시간만 재계산합니다.
+    async function settleGameTime(round, targetDateStr, playedMinutes, role) {
       await ensureAuth();
-      const dateStr = localDateStr(new Date().toISOString());
+      const dateStr = String(targetDateStr || '');
+      const targetDate = new Date(`${dateStr}T12:00:00`);
+      const todayStr = localDateStr(new Date().toISOString());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(targetDate.getTime())) throw new Error('정산 날짜가 올바르지 않습니다.');
+      if (targetDate.getDay() !== 0 && targetDate.getDay() !== 6) throw new Error('토요일 또는 일요일만 게임시간을 이월할 수 있습니다.');
+      if (dateStr > todayStr) throw new Error('아직 지나지 않은 날짜는 정산할 수 없습니다.');
+
       const budget = 60;
-      const played = Math.max(0, Math.min(budget, Number(playedMinutes) || 0));
+      const playedNum = Number(playedMinutes);
+      if (!Number.isFinite(playedNum) || playedNum < 0 || playedNum > budget) throw new Error('게임시간은 0~60분 사이로 입력해주세요.');
+      const played = Math.floor(playedNum);
       const banked = budget - played;
 
       const ref = db.collection('gameSettlements').doc(dateStr);
       const existing = await ref.get();
-      if (existing.exists && existing.data().itemId) {
+
+      // 새 버전에서 생성된 같은 날짜의 이월 아이템을 모두 찾아 잔여분은 제거하고,
+      // 이미 사용한 분량은 그대로 인정하여 재정산 때 중복 지급되지 않게 합니다.
+      const relatedSnap = await db.collection('items').where('gameSettlementDate','==',dateStr).get();
+      const seenIds = new Set();
+      let usedAlready = 0;
+      for (const d of relatedSnap.docs) {
+        seenIds.add(d.id);
+        const it = d.data();
+        if (it.status === '사용 전') await d.ref.delete();
+        else if (it.status === '사용 후') usedAlready += gameMinutesFromItem(it);
+      }
+
+      // 업데이트 이전에 만들어진 기존 이월 아이템도 가능한 범위에서 정리합니다.
+      if (existing.exists && existing.data().itemId && !seenIds.has(existing.data().itemId)) {
         const oldItemRef = db.collection('items').doc(existing.data().itemId);
         const oldItemSnap = await oldItemRef.get();
-        if (oldItemSnap.exists && oldItemSnap.data().status === '사용 전') {
-          await oldItemRef.delete();
+        if (oldItemSnap.exists) {
+          const oldItem = oldItemSnap.data();
+          if (oldItem.status === '사용 전') await oldItemRef.delete();
+          else if (oldItem.status === '사용 후') usedAlready += gameMinutesFromItem(oldItem);
         }
       }
 
+      const remainingBanked = Math.max(0, banked - usedAlready);
       let itemId = null;
-      if (banked > 0) {
+      if (remainingBanked > 0) {
         const itemDoc = await db.collection('items').add({
-          round: round || null, name: `게임 ${banked}분 (이월)`, obtainedDate: new Date().toISOString(),
-          status: '사용 전', usedDate: '', type: '보상'
+          round: round || null,
+          name: `게임 ${remainingBanked}분 (이월)`,
+          obtainedDate: new Date().toISOString(),
+          status: '사용 전', usedDate: '', type: '보상',
+          gameRollover: true, gameSettlementDate: dateStr, gameMinutes: remainingBanked
         });
         itemId = itemDoc.id;
       }
-      await ref.set({ date: dateStr, playedMinutes: played, bankedMinutes: banked, itemId, settledAt: new Date().toISOString() });
+      await ref.set({
+        date: dateStr,
+        playedMinutes: played,
+        bankedMinutes: banked,
+        usedFromBankedMinutes: usedAlready,
+        remainingBankedMinutes: remainingBanked,
+        itemId,
+        settledAt: new Date().toISOString()
+      });
       return getAppData(round, role);
     }
 
@@ -1729,48 +1824,88 @@
       renderLogs();
     }
 
-    // 🎮 주말에만 보이는 게임시간 정산 카드 갱신
+    // 🎮 평일에도 보이는 주말 게임시간 정산 카드
     function renderGameTimeCard() {
       const card = document.getElementById('gameTimeCard');
       if (!card) return;
-      const now = new Date();
-      const isWeekend = (now.getDay() === 0 || now.getDay() === 6);
-      if (!app.isParent || !isWeekend) { card.classList.add('hidden'); return; }
+      if (!app.isParent) { card.classList.add('hidden'); return; }
       card.classList.remove('hidden');
-      const statusText = document.getElementById('gameTimeStatusText');
-      const btn = document.getElementById('btnGameSettle');
-      const settlement = app.todayGameSettlement;
-      if (settlement) {
-        statusText.innerText = `오늘 ${settlement.playedMinutes}분 플레이 · ${settlement.bankedMinutes}분 이월 완료`;
-        btn.innerText = '다시 정산';
-      } else {
-        statusText.innerText = '아직 정산 안 했어요 (하루 60분 기준)';
-        btn.innerText = '정산하기';
-      }
+
+      const weekend = app.gameWeekendSettlements;
+      if (!weekend) return;
+
+      const totalRollover = (app.items || [])
+        .filter(i => i.status === '사용 전' && i.type === '보상' && (/게임\s*\d+\s*분.*이월/.test(String(i.name || '')) || i.gameRollover))
+        .reduce((sum, i) => sum + (Number(i.gameMinutes) || gameMinutesFromItem(i)), 0);
+      document.getElementById('gameRolloverBalanceText').innerText = `남은 이월 게임시간 ${totalRollover}분`;
+
+      const setRow = (key, labelText, dateStr, settlement, labelId, statusId, btnId) => {
+        const label = document.getElementById(labelId);
+        const status = document.getElementById(statusId);
+        const btn = document.getElementById(btnId);
+        const md = dateStr ? dateStr.slice(5).replace('-', '/') : '';
+        label.innerText = `${labelText} · ${md}`;
+
+        const isFuture = !!dateStr && dateStr > weekend.today;
+        btn.disabled = isFuture;
+        btn.classList.toggle('opacity-40', isFuture);
+        btn.classList.toggle('cursor-not-allowed', isFuture);
+
+        if (isFuture) {
+          status.innerText = '아직 정산할 수 없는 날짜예요';
+          btn.innerText = '대기';
+          return;
+        }
+        if (settlement) {
+          const used = Number(settlement.usedFromBankedMinutes) || 0;
+          const remaining = settlement.remainingBankedMinutes != null
+            ? Number(settlement.remainingBankedMinutes) || 0
+            : Math.max(0, Number(settlement.bankedMinutes) || 0);
+          status.innerText = used > 0
+            ? `${settlement.playedMinutes}분 플레이 · ${settlement.bankedMinutes}분 이월 · 이월분 ${used}분 사용`
+            : `${settlement.playedMinutes}분 플레이 · ${settlement.bankedMinutes}분 이월 (잔여 ${remaining}분)`;
+          btn.innerText = '수정';
+        } else {
+          status.innerText = '미정산 · 60분 중 실제로 사용한 시간을 입력하세요';
+          btn.innerText = '정산';
+        }
+      };
+
+      setRow('saturday', '토요일', weekend.saturdayDate, weekend.saturday, 'gameSatLabel', 'gameSatStatus', 'btnGameSettleSat');
+      setRow('sunday', '일요일', weekend.sundayDate, weekend.sunday, 'gameSunLabel', 'gameSunStatus', 'btnGameSettleSun');
     }
 
     let isSettlingGameTime = false;
-    function settleGameTimeUI() {
+    function settleGameTimeUI(dayKey) {
       if (isSettlingGameTime) return;
+      const weekend = app.gameWeekendSettlements;
+      if (!weekend) return;
+      const isSunday = dayKey === 'sunday';
+      const targetDate = isSunday ? weekend.sundayDate : weekend.saturdayDate;
+      const settlement = isSunday ? weekend.sunday : weekend.saturday;
+      const dayLabel = isSunday ? '일요일' : '토요일';
+      if (targetDate > weekend.today) { showToast('아직 지나지 않은 날짜는 정산할 수 없어요.'); return; }
+
       vibrate();
-      const defaultVal = app.todayGameSettlement ? String(app.todayGameSettlement.playedMinutes) : '0';
-      const playedStr = prompt('오늘 게임 몇 분 했어? (0~60 사이 숫자, 안 하면 0)', defaultVal);
+      const defaultVal = settlement ? String(settlement.playedMinutes) : '0';
+      const playedStr = prompt(`${dayLabel}(${targetDate.slice(5).replace('-', '/')})에 게임 몇 분 했어?\n0~60분 사이 숫자 입력 · 안 했으면 0`, defaultVal);
       if (playedStr === null) return;
       const played = parseInt(playedStr, 10);
-      if (isNaN(played) || played < 0) { showToast('0 이상의 숫자를 입력해주세요.'); return; }
+      if (isNaN(played) || played < 0 || played > 60) { showToast('0~60 사이 숫자를 입력해주세요.'); return; }
+
       isSettlingGameTime = true;
-      showSyncIndicator('정산 중...');
+      showSyncIndicator('이월 정산 중...');
       google.script.run
         .withSuccessHandler(res => {
           app = res;
           renderGameTimeCard();
           hideSyncIndicator();
-          const banked = Math.max(0, 60 - Math.min(60, played));
-          showToast(banked > 0 ? `${banked}분이 보관함에 저장됐어요! 🎮` : '오늘은 이월할 시간이 없어요.');
+          const banked = 60 - played;
+          showToast(banked > 0 ? `${dayLabel} 미사용 ${banked}분을 이월 처리했어요! 🎮` : `${dayLabel}은 이월할 시간이 없어요.`);
           isSettlingGameTime = false;
         })
         .withFailureHandler(err => { showSyncError('오류: ' + err.message); isSettlingGameTime = false; })
-        .settleGameTime(app.currentBoard.round, played, currentRole);
+        .settleGameTime(app.currentBoard.round, targetDate, played, currentRole);
     }
 
     // 🙋 요청함 모달 열기/렌더링
@@ -3035,21 +3170,23 @@
       
       list.innerHTML = filtered.map(item => {
         const isTicket = item.name === '룰렛 추첨권' && currentBoxType === '랜덤박스';
+        const isGameRollover = !!item.gameRollover || /게임\s*\d+\s*분.*이월/.test(String(item.name || ''));
         return `
         <li class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition">
           <div class="flex justify-between items-center mb-2">
-            <h4 class="font-black text-lg text-slate-700">${isTicket ? '🎟️' : '🎁'} ${item.name}</h4>
+            <h4 class="font-black text-lg text-slate-700">${isTicket ? '🎟️' : (isGameRollover ? '🎮' : '🎁')} ${item.name}</h4>
             <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">${item.round}회차</span>
           </div>
           <div class="text-[11px] text-slate-500 space-y-1 font-bold">
             <p>획득: ${item.obtainedDate}</p>
+            ${isGameRollover && item.gameSettlementDate ? `<p class="text-sky-600">이월 원본: ${item.gameSettlementDate}</p>` : ''}
             ${item.status === '사용 후' ? `<p class="text-pink-500">사용: ${item.usedDate}</p>` : ''}
           </div>
           ${item.status === '사용 전' ? (app.isParent ? `
             <p class="text-xs font-bold text-slate-400 mt-3 text-center bg-slate-100 py-2 rounded-lg">자녀 기기에서 사용할 수 있습니다</p>
           ` : `
             <button onclick="handleItemClick('${item.id}', '${item.name}', this)" class="w-full mt-3 py-3 bg-${currentBoxType === '보상' ? 'indigo' : 'pink'}-500 text-white font-black rounded-xl active:scale-95 transition shadow-md text-sm">
-              ${isTicket ? '추첨하기 🎯' : '사용하기'}
+              ${isTicket ? '추첨하기 🎯' : (isGameRollover ? '게임시간 사용하기' : '사용하기')}
             </button>
           `) : ''}
         </li>
@@ -3063,11 +3200,19 @@
         let match = name.match(/\d+/);
         if (match) {
           let max = parseInt(match[0]);
-          let useAmount = prompt(`[${name}]\n숫자가 포함된 보상입니다.\n얼마를 분할 사용할까요? (최대 ${max})`, max);
+          const isGameRollover = /게임\s*\d+\s*분.*이월/.test(String(name || ''));
+          let useAmount = prompt(
+            isGameRollover
+              ? `[${name}]\n사용할 게임시간을 분 단위로 입력하세요.\n예: 20 입력 → 20분 사용 + ${Math.max(0, max - 20)}분 자동 잔여 보관\n(1~${max}분)`
+              : `[${name}]\n숫자가 포함된 보상입니다.\n얼마를 분할 사용할까요? (최대 ${max})`,
+            max
+          );
           if(useAmount === null) return;
           useAmount = parseInt(useAmount);
           if(isNaN(useAmount) || useAmount <= 0 || useAmount > max) { alert("범위를 벗어난 숫자입니다."); return; }
-          if(!confirm(`[${name}]\n${useAmount} 만큼 차감 사용 처리를 진행할까요?`)) return;
+          if(!confirm(isGameRollover
+            ? `게임시간 ${useAmount}분을 사용하고 ${max - useAmount}분을 남길까요?`
+            : `[${name}]\n${useAmount} 만큼 차감 사용 처리를 진행할까요?`)) return;
           callUseSplitApi(id, btn, useAmount, max);
         } else {
           if(!confirm(`이 보상을 바로 사용할까요?`)) return;
