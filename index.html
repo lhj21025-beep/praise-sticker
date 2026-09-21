@@ -295,29 +295,45 @@
         <button onclick="openReportModal()" class="bg-blue-50 text-blue-600 py-3 rounded-2xl text-[11px] font-black border border-blue-100 active:scale-95 transition">📈 리포트</button>
       </div>
 
-      <!-- 🎮 평일에도 확인 가능한 주말 게임시간 이월 카드 -->
-      <div id="gameTimeCard" class="hidden mt-4 bg-sky-50 border border-sky-200 rounded-2xl p-4">
-        <div class="mb-3">
-          <p class="text-xs font-black text-sky-600">🎮 주말 게임시간 이월</p>
-          <p class="text-[11px] text-slate-500 font-bold mt-0.5">토·일 각 60분 · 평일에도 최근 주말을 정산/수정할 수 있어요</p>
-          <p id="gameRolloverBalanceText" class="text-[11px] text-sky-700 font-black mt-1">남은 이월 게임시간 0분</p>
+      <!-- 🎮 기본은 토·일 각 60분을 모두 사용한 것으로 보고, 남은 시간이 있을 때만 직접 이월합니다. -->
+      <div id="gameTimeCard" class="hidden mt-4">
+        <button onclick="openGameRolloverModal()" class="w-full py-3.5 bg-sky-500 text-white text-sm font-black rounded-2xl shadow-md active:scale-95 transition">
+          🎮 미사용시간 이월하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameRolloverModal" class="modal" onclick="closeModalOnBg(event, 'gameRolloverModal')">
+    <div class="modal-content p-6">
+      <div class="flex justify-between items-center mb-5">
+        <div>
+          <h3 class="font-black text-lg text-slate-800">🎮 미사용시간 이월하기</h3>
+          <p class="text-xs font-bold text-slate-400 mt-1">기본은 주말 게임시간을 모두 사용한 것으로 처리합니다.</p>
         </div>
-        <div class="space-y-2">
-          <div class="flex justify-between items-center gap-3 bg-white/80 border border-sky-100 rounded-xl p-3">
-            <div class="min-w-0">
-              <p id="gameSatLabel" class="text-xs font-black text-slate-700">토요일</p>
-              <p id="gameSatStatus" class="text-[11px] text-slate-500 font-bold mt-0.5">불러오는 중...</p>
-            </div>
-            <button id="btnGameSettleSat" onclick="settleGameTimeUI('saturday')" class="shrink-0 px-3 py-2 bg-sky-500 text-white text-xs font-black rounded-xl active:scale-95 transition">정산</button>
+        <button onclick="closeModal('gameRolloverModal')" class="text-xl text-slate-400">✕</button>
+      </div>
+
+      <div class="space-y-4">
+        <label class="block">
+          <span class="block text-xs font-black text-slate-600 mb-2">날짜</span>
+          <input id="gameRolloverDate" type="date" class="w-full p-3 bg-slate-100 rounded-xl outline-none text-base font-bold border border-slate-200">
+          <span class="block text-[11px] font-bold text-slate-400 mt-1">토요일 또는 일요일만 선택할 수 있습니다.</span>
+        </label>
+
+        <label class="block">
+          <span class="block text-xs font-black text-slate-600 mb-2">미사용 시간</span>
+          <div class="flex items-center gap-2">
+            <input id="gameRolloverMinutes" type="number" min="1" max="60" step="1" inputmode="numeric" placeholder="예: 30" class="min-w-0 flex-1 p-3 bg-slate-100 rounded-xl outline-none text-base font-bold border border-slate-200">
+            <span class="text-sm font-black text-slate-500">분</span>
           </div>
-          <div class="flex justify-between items-center gap-3 bg-white/80 border border-sky-100 rounded-xl p-3">
-            <div class="min-w-0">
-              <p id="gameSunLabel" class="text-xs font-black text-slate-700">일요일</p>
-              <p id="gameSunStatus" class="text-[11px] text-slate-500 font-bold mt-0.5">불러오는 중...</p>
-            </div>
-            <button id="btnGameSettleSun" onclick="settleGameTimeUI('sunday')" class="shrink-0 px-3 py-2 bg-sky-500 text-white text-xs font-black rounded-xl active:scale-95 transition">정산</button>
-          </div>
-        </div>
+          <span class="block text-[11px] font-bold text-slate-400 mt-1">1~60분 입력 · 같은 날짜를 다시 저장하면 해당 날짜의 이월시간이 수정됩니다.</span>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mt-6">
+        <button onclick="closeModal('gameRolloverModal')" class="py-3 bg-slate-100 text-slate-500 font-black rounded-xl active:scale-95 transition">취소</button>
+        <button id="btnSaveGameRollover" onclick="saveGameRolloverUI()" class="py-3 bg-sky-500 text-white font-black rounded-xl active:scale-95 transition">이월 저장</button>
       </div>
     </div>
   </div>
@@ -787,8 +803,6 @@
       let pendingRequests = [];
       // 🔔 부모 화면에서만 대기 중인 알림(룰렛 당첨/아이템 사용)도 함께 불러옵니다.
       let pendingNotifications = [];
-      // 🎮 부모 화면에는 주말이 지나도 최근 토/일 게임시간 정산 상태를 보여줍니다.
-      let gameWeekendSettlements = null;
       if (isParent) {
         const reqSnap = await db.collection('requests').where('status','==','대기 중').get();
         reqSnap.forEach(d => { const r = d.data(); pendingRequests.push({ id: d.id, reason: r.reason, detail: r.detail || '', childName: r.childName, date: fmtShort(r.date) }); });
@@ -797,26 +811,13 @@
         const notifSnap = await db.collection('notifications').where('status','==','대기 중').get();
         notifSnap.forEach(d => { const n = d.data(); pendingNotifications.push({ id: d.id, kind: n.kind, text: n.text, childName: n.childName || '', date: fmtShort(n.date) }); });
         pendingNotifications.sort((a,b) => a.date < b.date ? -1 : 1);
-
-        const weekendDates = getRelevantWeekendDates(new Date());
-        const [satSnap, sunSnap] = await Promise.all([
-          db.collection('gameSettlements').doc(weekendDates.saturday).get(),
-          db.collection('gameSettlements').doc(weekendDates.sunday).get()
-        ]);
-        gameWeekendSettlements = {
-          today: localDateStr(new Date().toISOString()),
-          saturdayDate: weekendDates.saturday,
-          sundayDate: weekendDates.sunday,
-          saturday: satSnap.exists ? satSnap.data() : null,
-          sunday: sunSnap.exists ? sunSnap.data() : null
-        };
       }
 
       return {
         userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
         boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
         praiseCounts, bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
-        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications, gameWeekendSettlements
+        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications
       };
     }
 
@@ -1064,31 +1065,28 @@
       return getAppData(null, role);
     }
 
-    // 🎮 토/일 게임시간 정산: 각 60분 중 쓰지 않은 시간을 보관함으로 이월합니다.
-    // 평일에도 최근 주말을 정산/수정할 수 있으며, 분할 사용된 이월분은 사용 이력을 유지한 채 남은 시간만 재계산합니다.
-    async function settleGameTime(round, targetDateStr, playedMinutes, role) {
+    // 🎮 기본은 주말 60분을 모두 사용한 것으로 처리합니다.
+    // 남은 시간이 있는 날만 날짜와 미사용 분을 직접 입력해 이월하며, 같은 날짜를 다시 저장하면 수정됩니다.
+    async function saveGameRollover(round, targetDateStr, unusedMinutes, role) {
       await ensureAuth();
       const dateStr = String(targetDateStr || '');
       const targetDate = new Date(`${dateStr}T12:00:00`);
       const todayStr = localDateStr(new Date().toISOString());
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(targetDate.getTime())) throw new Error('정산 날짜가 올바르지 않습니다.');
-      if (targetDate.getDay() !== 0 && targetDate.getDay() !== 6) throw new Error('토요일 또는 일요일만 게임시간을 이월할 수 있습니다.');
-      if (dateStr > todayStr) throw new Error('아직 지나지 않은 날짜는 정산할 수 없습니다.');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(targetDate.getTime())) throw new Error('날짜를 선택해주세요.');
+      if (targetDate.getDay() !== 0 && targetDate.getDay() !== 6) throw new Error('토요일 또는 일요일만 선택할 수 있습니다.');
+      if (dateStr > todayStr) throw new Error('미래 날짜는 이월할 수 없습니다.');
 
-      const budget = 60;
-      const playedNum = Number(playedMinutes);
-      if (!Number.isFinite(playedNum) || playedNum < 0 || playedNum > budget) throw new Error('게임시간은 0~60분 사이로 입력해주세요.');
-      const played = Math.floor(playedNum);
-      const banked = budget - played;
+      const requested = Math.floor(Number(unusedMinutes));
+      if (!Number.isFinite(requested) || requested < 1 || requested > 60) throw new Error('미사용 시간은 1~60분 사이로 입력해주세요.');
 
       const ref = db.collection('gameSettlements').doc(dateStr);
       const existing = await ref.get();
-
-      // 새 버전에서 생성된 같은 날짜의 이월 아이템을 모두 찾아 잔여분은 제거하고,
-      // 이미 사용한 분량은 그대로 인정하여 재정산 때 중복 지급되지 않게 합니다.
       const relatedSnap = await db.collection('items').where('gameSettlementDate','==',dateStr).get();
+
       const seenIds = new Set();
       let usedAlready = 0;
+
+      // 같은 날짜의 아직 안 쓴 이월분은 새 입력값으로 교체하고, 이미 쓴 분량은 사용 이력으로 유지합니다.
       for (const d of relatedSnap.docs) {
         seenIds.add(d.id);
         const it = d.data();
@@ -1096,7 +1094,7 @@
         else if (it.status === '사용 후') usedAlready += gameMinutesFromItem(it);
       }
 
-      // 업데이트 이전에 만들어진 기존 이월 아이템도 가능한 범위에서 정리합니다.
+      // 이전 버전에서 만든 동일 날짜 아이템도 중복되지 않게 처리합니다.
       if (existing.exists && existing.data().itemId && !seenIds.has(existing.data().itemId)) {
         const oldItemRef = db.collection('items').doc(existing.data().itemId);
         const oldItemSnap = await oldItemRef.get();
@@ -1107,27 +1105,33 @@
         }
       }
 
-      const remainingBanked = Math.max(0, banked - usedAlready);
+      if (requested < usedAlready) {
+        throw new Error(`이미 이월분 ${usedAlready}분을 사용해서 ${usedAlready}분보다 작게 수정할 수 없습니다.`);
+      }
+
+      const remaining = requested - usedAlready;
       let itemId = null;
-      if (remainingBanked > 0) {
+      if (remaining > 0) {
         const itemDoc = await db.collection('items').add({
           round: round || null,
-          name: `게임 ${remainingBanked}분 (이월)`,
+          name: `게임 ${remaining}분 (이월)`,
           obtainedDate: new Date().toISOString(),
           status: '사용 전', usedDate: '', type: '보상',
-          gameRollover: true, gameSettlementDate: dateStr, gameMinutes: remainingBanked
+          gameRollover: true, gameSettlementDate: dateStr, gameMinutes: remaining
         });
         itemId = itemDoc.id;
       }
+
       await ref.set({
         date: dateStr,
-        playedMinutes: played,
-        bankedMinutes: banked,
+        unusedMinutes: requested,
+        bankedMinutes: requested,
         usedFromBankedMinutes: usedAlready,
-        remainingBankedMinutes: remainingBanked,
+        remainingBankedMinutes: remaining,
         itemId,
         settledAt: new Date().toISOString()
       });
+
       return getAppData(round, role);
     }
 
@@ -1419,7 +1423,7 @@
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
-      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, updateLogEntry, settleGameTime
+      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, updateLogEntry, saveGameRollover
     };
 
     function __makeRunner() {
@@ -1824,88 +1828,68 @@
       renderLogs();
     }
 
-    // 🎮 평일에도 보이는 주말 게임시간 정산 카드
+    // 🎮 부모 화면에는 요일과 관계없이 이월 버튼 하나만 표시합니다.
     function renderGameTimeCard() {
       const card = document.getElementById('gameTimeCard');
       if (!card) return;
-      if (!app.isParent) { card.classList.add('hidden'); return; }
-      card.classList.remove('hidden');
-
-      const weekend = app.gameWeekendSettlements;
-      if (!weekend) return;
-
-      const totalRollover = (app.items || [])
-        .filter(i => i.status === '사용 전' && i.type === '보상' && (/게임\s*\d+\s*분.*이월/.test(String(i.name || '')) || i.gameRollover))
-        .reduce((sum, i) => sum + (Number(i.gameMinutes) || gameMinutesFromItem(i)), 0);
-      document.getElementById('gameRolloverBalanceText').innerText = `남은 이월 게임시간 ${totalRollover}분`;
-
-      const setRow = (key, labelText, dateStr, settlement, labelId, statusId, btnId) => {
-        const label = document.getElementById(labelId);
-        const status = document.getElementById(statusId);
-        const btn = document.getElementById(btnId);
-        const md = dateStr ? dateStr.slice(5).replace('-', '/') : '';
-        label.innerText = `${labelText} · ${md}`;
-
-        const isFuture = !!dateStr && dateStr > weekend.today;
-        btn.disabled = isFuture;
-        btn.classList.toggle('opacity-40', isFuture);
-        btn.classList.toggle('cursor-not-allowed', isFuture);
-
-        if (isFuture) {
-          status.innerText = '아직 정산할 수 없는 날짜예요';
-          btn.innerText = '대기';
-          return;
-        }
-        if (settlement) {
-          const used = Number(settlement.usedFromBankedMinutes) || 0;
-          const remaining = settlement.remainingBankedMinutes != null
-            ? Number(settlement.remainingBankedMinutes) || 0
-            : Math.max(0, Number(settlement.bankedMinutes) || 0);
-          status.innerText = used > 0
-            ? `${settlement.playedMinutes}분 플레이 · ${settlement.bankedMinutes}분 이월 · 이월분 ${used}분 사용`
-            : `${settlement.playedMinutes}분 플레이 · ${settlement.bankedMinutes}분 이월 (잔여 ${remaining}분)`;
-          btn.innerText = '수정';
-        } else {
-          status.innerText = '미정산 · 60분 중 실제로 사용한 시간을 입력하세요';
-          btn.innerText = '정산';
-        }
-      };
-
-      setRow('saturday', '토요일', weekend.saturdayDate, weekend.saturday, 'gameSatLabel', 'gameSatStatus', 'btnGameSettleSat');
-      setRow('sunday', '일요일', weekend.sundayDate, weekend.sunday, 'gameSunLabel', 'gameSunStatus', 'btnGameSettleSun');
+      card.classList.toggle('hidden', !app.isParent);
     }
 
-    let isSettlingGameTime = false;
-    function settleGameTimeUI(dayKey) {
-      if (isSettlingGameTime) return;
-      const weekend = app.gameWeekendSettlements;
-      if (!weekend) return;
-      const isSunday = dayKey === 'sunday';
-      const targetDate = isSunday ? weekend.sundayDate : weekend.saturdayDate;
-      const settlement = isSunday ? weekend.sunday : weekend.saturday;
-      const dayLabel = isSunday ? '일요일' : '토요일';
-      if (targetDate > weekend.today) { showToast('아직 지나지 않은 날짜는 정산할 수 없어요.'); return; }
+    function defaultGameRolloverDate() {
+      const d = new Date();
+      d.setHours(12, 0, 0, 0);
+      const day = d.getDay();
+      if (day !== 0 && day !== 6) d.setDate(d.getDate() - day); // 평일이면 가장 최근 일요일
+      return localDateStr(d.toISOString());
+    }
 
-      vibrate();
-      const defaultVal = settlement ? String(settlement.playedMinutes) : '0';
-      const playedStr = prompt(`${dayLabel}(${targetDate.slice(5).replace('-', '/')})에 게임 몇 분 했어?\n0~60분 사이 숫자 입력 · 안 했으면 0`, defaultVal);
-      if (playedStr === null) return;
-      const played = parseInt(playedStr, 10);
-      if (isNaN(played) || played < 0 || played > 60) { showToast('0~60 사이 숫자를 입력해주세요.'); return; }
+    function openGameRolloverModal() {
+      const dateInput = document.getElementById('gameRolloverDate');
+      const minutesInput = document.getElementById('gameRolloverMinutes');
+      const today = localDateStr(new Date().toISOString());
+      dateInput.max = today;
+      dateInput.value = defaultGameRolloverDate();
+      minutesInput.value = '';
+      openModal('gameRolloverModal');
+      setTimeout(() => minutesInput.focus(), 50);
+    }
 
-      isSettlingGameTime = true;
-      showSyncIndicator('이월 정산 중...');
+    let isSavingGameRollover = false;
+    function saveGameRolloverUI() {
+      if (isSavingGameRollover) return;
+      const dateStr = document.getElementById('gameRolloverDate').value;
+      const minutes = parseInt(document.getElementById('gameRolloverMinutes').value, 10);
+
+      if (!dateStr) { showToast('날짜를 선택해주세요.'); return; }
+      const d = new Date(`${dateStr}T12:00:00`);
+      if (d.getDay() !== 0 && d.getDay() !== 6) { showToast('토요일 또는 일요일만 선택할 수 있어요.'); return; }
+      if (dateStr > localDateStr(new Date().toISOString())) { showToast('미래 날짜는 선택할 수 없어요.'); return; }
+      if (isNaN(minutes) || minutes < 1 || minutes > 60) { showToast('미사용 시간은 1~60분으로 입력해주세요.'); return; }
+
+      isSavingGameRollover = true;
+      const btn = document.getElementById('btnSaveGameRollover');
+      btn.disabled = true;
+      btn.innerText = '저장 중...';
+      showSyncIndicator('이월 저장 중...');
+
       google.script.run
         .withSuccessHandler(res => {
           app = res;
+          closeModal('gameRolloverModal');
           renderGameTimeCard();
           hideSyncIndicator();
-          const banked = 60 - played;
-          showToast(banked > 0 ? `${dayLabel} 미사용 ${banked}분을 이월 처리했어요! 🎮` : `${dayLabel}은 이월할 시간이 없어요.`);
-          isSettlingGameTime = false;
+          showToast(`${dateStr.slice(5).replace('-', '/')} 미사용 ${minutes}분을 이월했어요! 🎮`);
+          isSavingGameRollover = false;
+          btn.disabled = false;
+          btn.innerText = '이월 저장';
         })
-        .withFailureHandler(err => { showSyncError('오류: ' + err.message); isSettlingGameTime = false; })
-        .settleGameTime(app.currentBoard.round, targetDate, played, currentRole);
+        .withFailureHandler(err => {
+          showSyncError('오류: ' + err.message);
+          isSavingGameRollover = false;
+          btn.disabled = false;
+          btn.innerText = '이월 저장';
+        })
+        .saveGameRollover(app.currentBoard.round, dateStr, minutes, currentRole);
     }
 
     // 🙋 요청함 모달 열기/렌더링
