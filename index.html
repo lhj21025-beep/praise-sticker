@@ -786,6 +786,13 @@
       let currentStreak = 0;
       for (const l of logs) { if (l.executor === '시스템') continue; if (l.rawScore > 0) currentStreak += l.rawScore; else if (l.rawScore < 0) break; }
 
+      // 목표를 채운 채 멈춘 회차는 조회 시에도 복구합니다. 이미 읽은 로그를 재사용합니다.
+      if (currentBoard.status !== '보상 수령 완료' && currentScore >= Number(currentBoard.targetScore)) {
+        await grantRewardIfEligible(currentBoard.round, logsSnap);
+        const repairedBoard = await db.collection('boards').doc(String(currentBoard.round)).get();
+        if (repairedBoard.exists) Object.assign(currentBoard, repairedBoard.data());
+      }
+
       const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
       let items = [];
       itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0 }); });
@@ -821,14 +828,18 @@
       };
     }
 
-    async function grantRewardIfEligible(round) {
+    function isBoardCompletionReward(item) {
+      // 이월분과 그 분할 사용 기록은 회차 완성 보상이 아닙니다.
+      return item.type === '보상' && !item.gameRollover && !item.gameSettlementDate
+        && !/게임\s*\d+\s*분.*이월/.test(String(item.name || ''));
+    }
+
+    async function grantRewardIfEligible(round, knownLogsSnap) {
       const boardRef = db.collection('boards').doc(String(round));
       const boardSnap = await boardRef.get();
-      if (!boardSnap.exists) return false;
-      const board = boardSnap.data();
-      if (board.status === '보상 수령 완료') return false;
+      if (!boardSnap.exists || boardSnap.data().status === '보상 수령 완료') return false;
 
-      const logsSnap = await db.collection('logs').where('round','==',round).get();
+      const logsSnap = knownLogsSnap || await db.collection('logs').where('round','==',round).get();
       let score = 0;
       let firstDate = null, lastDate = null;
       logsSnap.forEach(d => {
@@ -840,19 +851,34 @@
           if (!lastDate || ds > lastDate) lastDate = ds;
         }
       });
-      if (score < board.targetScore) return false;
+      const target = Number(boardSnap.data().targetScore);
+      if (!Number.isFinite(score) || !Number.isFinite(target) || target <= 0 || score < target) return false;
 
       const itemsSnap = await db.collection('items').where('round','==',round).get();
-      const hasReward = itemsSnap.docs.some(d => d.data().type === '보상');
-      if (hasReward) return false;
-
-      // 🗓️ 완료 시점에 소요일수를 딱 한 번 계산해서 회차 문서에 저장 (이미 방금 읽은 로그를 재사용, 추가 읽기 0회)
+      const hasReward = itemsSnap.docs.some(d => isBoardCompletionReward(d.data()));
       const daysTaken = (firstDate && lastDate) ? (Math.round((new Date(lastDate) - new Date(firstDate)) / 86400000) + 1) : null;
-      const updateData = { status: '보상 수령 완료' };
-      if (daysTaken !== null) { updateData.daysTaken = daysTaken; updateData.firstLogDate = firstDate; }
-      await boardRef.update(updateData);
-      await db.collection('items').add({ round, name: board.reward, obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'보상' });
-      return true;
+      const rewardRef = db.collection('items').doc('board-completion-' + String(round));
+
+      // 상태와 보상을 함께 저장하고, 여러 기기에서 동시에 열어도 한 번만 지급합니다.
+      return db.runTransaction(async transaction => {
+        const latestBoardSnap = await transaction.get(boardRef);
+        const rewardSnap = await transaction.get(rewardRef);
+        if (!latestBoardSnap.exists) return false;
+        const latestBoard = latestBoardSnap.data();
+        const latestTarget = Number(latestBoard.targetScore);
+        if (latestBoard.status === '보상 수령 완료' || !Number.isFinite(latestTarget) || latestTarget <= 0 || score < latestTarget) return false;
+        const updateData = { status: '보상 수령 완료' };
+        if (daysTaken !== null) { updateData.daysTaken = daysTaken; updateData.firstLogDate = firstDate; }
+        transaction.update(boardRef, updateData);
+        if (!hasReward && !rewardSnap.exists) {
+          transaction.set(rewardRef, {
+            round, name: latestBoard.reward, obtainedDate: new Date().toISOString(),
+            status: '사용 전', usedDate: '', type: '보상', rewardSource: 'board-completion'
+          });
+          return true;
+        }
+        return false;
+      });
     }
 
     async function addStampRecord(round, reason, detail, score, executor, role) {
