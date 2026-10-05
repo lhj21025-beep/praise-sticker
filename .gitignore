@@ -1,0 +1,5 @@
+android/build/
+*.apk
+*.jks
+*.keystore
+*password*.txt
