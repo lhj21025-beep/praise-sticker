@@ -1031,54 +1031,75 @@
       return getAppData(round, role);
     }
 
+    function isRouletteRetry(item) {
+      const name = String(item.name || '').replace(/\s+/g, '');
+      return item.type === '랜덤박스' && /^(?:룰렛)?다시(?:돌리기|뽑기)(?:권|1회|1회권)?$/.test(name);
+    }
+
     async function useItemSplit(itemId, childName, useAmount, maxAmount) {
       await ensureAuth();
       const ref = db.collection('items').doc(itemId);
-      const snap = await ref.get();
-      let usedNameFinal = '';
-      if (snap.exists && snap.data().status === '사용 전') {
+      const remainingRef = db.collection('items').doc();
+      const ticketRef = db.collection('items').doc(`retry_${itemId}`);
+      const notificationRef = db.collection('notifications').doc();
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists || snap.data().status !== '사용 전') return;
         const it = snap.data();
+        const retry = isRouletteRetry(it);
+        const existingTicket = retry ? await tx.get(ticketRef) : null;
+        const now = new Date().toISOString();
         let usedName = it.name;
         const isGameRollover = !!it.gameRollover || /게임\s*\d+\s*분.*이월/.test(String(it.name || ''));
-        if (useAmount && maxAmount && useAmount < maxAmount) {
+        if (retry) {
+          if (!existingTicket.exists) tx.set(ticketRef, {
+            round: it.round, name: '룰렛 추첨권', obtainedDate: now,
+            status: '사용 전', usedDate: '', type: '랜덤박스',
+            prizesSnapshot: it.prizesSnapshot || '', sourceRetryItemId: itemId
+          });
+        } else if (useAmount && maxAmount && useAmount < maxAmount) {
           usedName = it.name.replace(String(maxAmount), String(useAmount));
           const remainAmount = maxAmount - useAmount;
-          const remainName = it.name.replace(String(maxAmount), String(remainAmount));
-          await db.collection('items').add({
-            round: it.round, name: remainName, obtainedDate: it.obtainedDate,
-            status:'사용 전', usedDate:'', type: it.type,
+          tx.set(remainingRef, {
+            round: it.round, name: it.name.replace(String(maxAmount), String(remainAmount)),
+            obtainedDate: it.obtainedDate, status:'사용 전', usedDate:'', type: it.type,
             ...(isGameRollover ? {
-              gameRollover: true,
-              gameSettlementDate: it.gameSettlementDate || '',
-              gameMinutes: remainAmount
+              gameRollover: true, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: remainAmount
             } : {})
           });
         }
-        await ref.update({
-          name: usedName, status:'사용 후', usedDate: new Date().toISOString(),
+        tx.update(ref, {
+          name: usedName, status:'사용 후', usedDate: now,
+          ...(retry ? { replacementTicketId: ticketRef.id } : {}),
           ...(isGameRollover && useAmount ? { gameRollover: true, gameMinutes: useAmount } : {})
         });
-        usedNameFinal = usedName;
-      }
-      // 🔔 아이템 사용 알림: 부모가 다음에 접속하면 팝업으로 보여줍니다.
-      if (usedNameFinal) {
-        await db.collection('notifications').add({ kind: 'item_use', text: `🎒 사용: ${usedNameFinal}`, childName: childName || '', date: new Date().toISOString(), status: '대기 중' });
-      }
+        tx.set(notificationRef, {
+          kind: 'item_use', text: `🎒 사용: ${usedName}${retry ? ' → 룰렛 추첨권 1장 지급' : ''}`,
+          childName: childName || '', date: now, status: '대기 중'
+        });
+      });
       return getAppData(null, 'child');
     }
 
     async function saveRouletteResult(ticketId, wonPrize, childName) {
       await ensureAuth();
       const ref = db.collection('items').doc(ticketId);
-      const snap = await ref.get();
-      let round = null;
-      if (snap.exists && snap.data().status === '사용 전') {
-        round = snap.data().round;
-        await ref.update({ status:'사용 후', usedDate: new Date().toISOString() });
-      }
-      if (round) await db.collection('items').add({ round, name: wonPrize, obtainedDate: new Date().toISOString(), status:'사용 전', usedDate:'', type:'랜덤박스' });
-      // 🔔 룰렛 당첨 알림: 부모가 다음에 접속하면 팝업으로 보여줍니다.
-      await db.collection('notifications').add({ kind: 'roulette', text: `🎰 룰렛 당첨: ${wonPrize}`, childName: childName || '', date: new Date().toISOString(), status: '대기 중' });
+      const prizeRef = db.collection('items').doc();
+      const notificationRef = db.collection('notifications').doc();
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists || snap.data().status !== '사용 전') return;
+        const ticket = snap.data();
+        const now = new Date().toISOString();
+        tx.update(ref, { status:'사용 후', usedDate: now });
+        tx.set(prizeRef, {
+          round: ticket.round, name: wonPrize, obtainedDate: now, status:'사용 전', usedDate:'', type:'랜덤박스',
+          prizesSnapshot: ticket.prizesSnapshot || '', sourceTicketId: ticketId
+        });
+        tx.set(notificationRef, {
+          kind: 'roulette', text: `🎰 룰렛 당첨: ${wonPrize}`, childName: childName || '', date: now, status: '대기 중'
+        });
+      });
       return getAppData(null, 'child');
     }
 
@@ -3206,6 +3227,9 @@
     function handleItemClick(id, name, btn) {
       if (name === '룰렛 추첨권') {
         openRoulette(id);
+      } else if (isRouletteRetry({ name, type: '랜덤박스' })) {
+        if (!confirm('룰렛 다시 돌리기를 사용하고 추첨권 1장을 받을까요?')) return;
+        callUseSplitApi(id, btn, null, null);
       } else {
         let match = name.match(/\d+/);
         if (match) {
@@ -3235,7 +3259,7 @@
       vibrate();
       btn.disabled = true; btn.innerText = "처리 중...";
       google.script.run
-        .withSuccessHandler(res => { app = res; renderItems(); showToast("사용 처리 성공! 부모님 이메일 통보 완료 💌"); })
+        .withSuccessHandler(res => { app = res; renderItems(); showToast("사용 완료! 보관함에 반영했어요. 🎁"); })
         .withFailureHandler(err => { showToast("오류: " + err.message); btn.disabled = false; btn.innerText = "사용하기"; })
         .useItemSplit(id, app.userName, useAmount, maxAmount);
     }
