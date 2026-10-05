@@ -593,21 +593,23 @@ final class Store {
 
   void backfill() throws Exception {
     requireParent();
-    db.transaction(
-        tx -> {
-          List<JSONObject> b = tx.query("boards", null, null), logs = tx.query("logs", null, null);
-          for (JSONObject x : b) {
-            if (x.has("daysTaken") || x.optString("status").equals("진행중")) continue;
+    for (JSONObject candidate : db.query("boards", null, null, null)) {
+      if (candidate.has("daysTaken") || candidate.optString("status").equals("진행중")) continue;
+      int round = candidate.optInt("round");
+      db.transaction(
+          tx -> {
+            JSONObject board = tx.get("boards/" + round);
+            List<JSONObject> logs = tx.query("logs", "round", round);
+            if (board == null || board.has("daysTaken")) return;
             String first = null, last = null;
-            for (JSONObject l : logs)
-              if (l.optInt("round") == x.optInt("round")) {
-                String date = day(l.optString("date"));
-                if (first == null || date.compareTo(first) < 0) first = date;
-                if (last == null || date.compareTo(last) > 0) last = date;
-              }
+            for (JSONObject l : logs) {
+              String date = day(l.optString("date"));
+              if (first == null || date.compareTo(first) < 0) first = date;
+              if (last == null || date.compareTo(last) > 0) last = date;
+            }
             if (first != null)
               tx.patch(
-                  x.optString("__path"),
+                  "boards/" + round,
                   obj(
                       "daysTaken",
                       java.time.temporal.ChronoUnit.DAYS.between(
@@ -615,8 +617,8 @@ final class Store {
                           + 1,
                       "firstLogDate",
                       first));
-          }
-        });
+          });
+    }
   }
 
   void repairBonuses() throws Exception {

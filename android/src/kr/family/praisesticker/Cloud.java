@@ -262,6 +262,7 @@ class Cloud {
   final class Tx {
     final String id;
     final JSONArray writes = new JSONArray();
+    final Map<String, JSONObject> reads = new LinkedHashMap<>();
     boolean wrote = false;
 
     Tx(String id) {
@@ -270,12 +271,16 @@ class Cloud {
 
     JSONObject get(String path) throws Exception {
       if (wrote) throw new IllegalStateException("Read before write required");
-      return Cloud.this.get(path, id);
+      JSONObject value = Cloud.this.get(path, id);
+      reads.put(path, value);
+      return value;
     }
 
     List<JSONObject> query(String c, String f, Object v) throws Exception {
       if (wrote) throw new IllegalStateException("Read before write required");
-      return Cloud.this.query(c, f, v, id);
+      List<JSONObject> values = Cloud.this.query(c, f, v, id);
+      for (JSONObject value : values) reads.put(value.optString("__path"), value);
+      return values;
     }
 
     void set(String path, JSONObject data) throws Exception {
@@ -294,25 +299,60 @@ class Cloud {
     }
   }
 
+  // Firebase end-user tokens support read-only snapshots plus optimistic Commit
+  // preconditions. Pessimistic readWrite beginTransaction requires server credentials.
+  JSONArray guardedWrites(Tx tx) throws Exception {
+    JSONArray out = new JSONArray();
+    Set<String> changed = new HashSet<>();
+    for (int i = 0; i < tx.writes.length(); i++) {
+      JSONObject w = tx.writes.getJSONObject(i);
+      String full =
+          w.has("update") ? w.getJSONObject("update").getString("name") : w.getString("delete");
+      String path = full.substring(ROOT.length());
+      changed.add(path);
+      JSONObject prior = tx.reads.get(path);
+      JSONObject condition =
+          prior == null ? obj("exists", false) : obj("updateTime", prior.getString("__updateTime"));
+      w.put("currentDocument", condition);
+      out.put(w);
+    }
+    for (String path : tx.reads.keySet())
+      if (!changed.contains(path)) {
+        JSONObject prior = tx.reads.get(path);
+        out.put(
+            obj(
+                "verify",
+                ROOT + path,
+                "currentDocument",
+                prior == null
+                    ? obj("exists", false)
+                    : obj("updateTime", prior.getString("__updateTime"))));
+      }
+    if (out.length() > 500) throw new IOException("한 번에 처리할 기록이 너무 많습니다. 회차별로 나누어 처리해주세요.");
+    return out;
+  }
+
   void transaction(Work work) throws Exception {
     for (int attempt = 0; attempt < 4; attempt++) {
       String id =
-          ((JSONObject) request(":beginTransaction", obj("options", obj("readWrite", obj()))))
+          ((JSONObject) request(":beginTransaction", obj("options", obj("readOnly", obj()))))
               .getString("transaction");
       Tx tx = new Tx(id);
       try {
         work.run(tx);
-        if (tx.writes.length() > 0) request(":commit", obj("transaction", id, "writes", tx.writes));
-        else request(":rollback", obj("transaction", id));
+        if (tx.writes.length() > 0) request(":commit", obj("writes", guardedWrites(tx)));
         return;
       } catch (Exception e) {
+        if (e instanceof ApiError
+            && (((ApiError) e).status.equals("ABORTED")
+                || ((ApiError) e).status.equals("FAILED_PRECONDITION"))
+            && attempt < 3) continue;
+        throw e;
+      } finally {
         try {
           request(":rollback", obj("transaction", id));
         } catch (Exception ignored) {
         }
-        if (e instanceof ApiError && ((ApiError) e).status.equals("ABORTED") && attempt < 3)
-          continue;
-        throw e;
       }
     }
   }

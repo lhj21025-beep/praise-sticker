@@ -16,6 +16,8 @@ public class StoreTest {
   static class Fake extends Cloud {
     Map<String, JSONObject> docs = new LinkedHashMap<>();
     boolean failCommit = false, abortOnce = false;
+    Map<String, String> versions = new HashMap<>();
+    int revision = 0;
 
     Fake() {
       super(null);
@@ -23,6 +25,7 @@ public class StoreTest {
 
     void seed(String p, JSONObject o) {
       docs.put(p, o);
+      versions.put(p, String.valueOf(++revision));
     }
 
     JSONObject raw(String path) throws Exception {
@@ -32,7 +35,7 @@ public class StoreTest {
           "fields",
           encodeFields(docs.get(path)),
           "updateTime",
-          "2026-10-05T00:00:00Z");
+          versions.get(path));
     }
 
     @Override
@@ -68,6 +71,21 @@ public class StoreTest {
         JSONArray writes = b.getJSONArray("writes");
         for (int i = 0; i < writes.length(); i++) {
           JSONObject w = writes.getJSONObject(i);
+          String path =
+              (w.has("update")
+                      ? w.getJSONObject("update").getString("name")
+                      : w.has("delete") ? w.getString("delete") : w.getString("verify"))
+                  .substring(ROOT.length());
+          JSONObject cond = w.getJSONObject("currentDocument");
+          if (cond.has("exists") && cond.getBoolean("exists") != docs.containsKey(path))
+            throw new ApiError(400, "FAILED_PRECONDITION", "existence changed");
+          if (cond.has("updateTime") && !cond.getString("updateTime").equals(versions.get(path)))
+            throw new ApiError(400, "FAILED_PRECONDITION", "version changed");
+        }
+
+        for (int i = 0; i < writes.length(); i++) {
+          JSONObject w = writes.getJSONObject(i);
+          if (w.has("verify")) continue;
           if (w.has("delete")) {
             next.remove(w.getString("delete").substring(ROOT.length()));
             continue;
@@ -85,6 +103,17 @@ public class StoreTest {
           } else next.put(path, data);
         }
         docs = next;
+        for (int i = 0; i < writes.length(); i++) {
+          JSONObject w = writes.getJSONObject(i);
+          if (w.has("verify")) continue;
+          String path =
+              (w.has("update")
+                      ? w.getJSONObject("update").getString("name")
+                      : w.getString("delete"))
+                  .substring(ROOT.length());
+          if (w.has("delete")) versions.remove(path);
+          else versions.put(path, String.valueOf(++revision));
+        }
         return obj();
       }
       String path = suffix.split("\\?")[0];
@@ -220,6 +249,19 @@ public class StoreTest {
         decodeFields(encodeFields(roundtrip)).getJSONObject("nested").getJSONArray("x").length()
             == 3,
         "Firestore codec roundtrip");
+    Cloud.Tx guarded = db.new Tx("test");
+    guarded.get("meta/state");
+    guarded.patch("meta/state", obj("dailyBuff", "new"));
+    JSONArray stale = db.guardedWrites(guarded);
+    db.seed("meta/state", obj("lifetimeScore", 777, "dailyBuff", "external"));
+    try {
+      db.request(":commit", obj("writes", stale));
+      throw new AssertionError("stale overwrite accepted");
+    } catch (Cloud.ApiError expected) {
+    }
+    check(
+        db.docs.get("meta/state").optInt("lifetimeScore") == 777,
+        "concurrent external change preserved by precondition");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

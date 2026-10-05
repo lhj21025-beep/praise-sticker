@@ -10,7 +10,7 @@ The app uses the existing `praise-sticker-756b4` Firebase Auth / Firestore backe
 
 Refresh occurs on opening/resuming the app, after writes, via the refresh control, and every 60 seconds while the app is foregrounded and no dialog is open. No background poll runs after leaving the app. The existing web client requires refresh to show changes made elsewhere. This is **not** continuous real-time streaming or offline mutation support.
 
-Firestore transactions atomically exchange retry rewards, split balances, save roulette outcomes, grant completion rewards and update rollover settlements. StoreTest uses an in-memory REST simulator and never writes production data. External edits by an old web session are governed by that web version's existing implementation.
+Optimistic Firestore commits (read-only snapshots plus per-document update-time preconditions) atomically exchange retry rewards, split balances, save roulette outcomes, grant completion rewards and update rollover settlements. StoreTest uses an in-memory REST simulator and never writes production data. External edits by an old web session are governed by that web version's existing implementation.
 
 ## Build
 
@@ -36,8 +36,8 @@ Tests additionally use org.json 20240303 as `json.jar` in the tools directory. T
 ## Validation for 1.0.0
 
 - Java compilation and D8 dex generation passed.
-- 24 deterministic data checks passed; no production writes.
-- Live read-only verification passed for anonymous sign-in, token refresh, Firestore query in a read-only transaction, and rollback.
+- 25 deterministic data checks passed; no production writes.
+- The actual Java HTTP client passed anonymous sign-in, token refresh, Firestore reads in a read-only snapshot, rollback, and a verify-only atomic commit. No production documents were written.
 - APK signature and package metadata verification passed.
 - No physical Android device or emulator was available in the creation environment. Installation, UI rendering, lifecycle, Android share/storage dialogs, and device networking must still be verified on a device. Do not describe these as already tested.
 
