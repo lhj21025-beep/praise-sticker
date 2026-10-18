@@ -19,6 +19,7 @@ Baseline: web commit d3cf54617442a558bc94944efccdb8cc2683fc76.
 | Weekend unused time entry and split usage | rollover, Store.rollover | Implemented; validation before atomic changes |
 | Child praise requests, approval/dismissal | requestForm/requests, Store.stamp/patch | Implemented |
 | Wish creation, approval, postponement, pending delete | wishes/wishReply | Implemented |
+| Random-box sticker reward approval | Store.acknowledgeNotification / web confirmNotification | Parent grants exact count once to active board; shared source marker and log ID |
 | In-app parent notifications | showNotifications | Implemented; not background push |
 | Statistics: positive/negative counts, top 5, weekdays | report | Implemented with native bars |
 | Completion durations and historical backfill | history, Store.backfill | Implemented |

@@ -294,6 +294,58 @@ final class Store {
     complete(r);
   }
 
+  static int stickerRewardCount(JSONObject item) {
+    if(item==null || !item.optString("type").equals("랜덤박스"))return 0;
+    java.util.regex.Matcher m=java.util.regex.Pattern.compile("^(?:칭찬)?스티커([1-9]\\d{0,2})(?:장|개)(?:찍어주기|찍기|추가|지급)?$").matcher(item.optString("name").replaceAll("\\s+",""));
+    return m.matches()?Integer.parseInt(m.group(1)):0;
+  }
+
+  static int notificationStickerCount(JSONObject n){
+    if(n==null||!n.optString("kind").equals("item_use"))return 0;
+    return stickerRewardCount(obj("type","랜덤박스","name",n.optString("text").replaceFirst("^🎒 사용:\\s*","")));
+  }
+
+  String notificationItemId(JSONObject n,String notificationId)throws Exception{
+    if(!n.optString("itemId").isEmpty())return n.optString("itemId");
+    if(notificationId.startsWith("use-"))return notificationId.substring(4);
+    List<JSONObject>matches=new ArrayList<>();
+    for(JSONObject item:db.query("items","status","사용 후",null)){
+      if(stickerRewardCount(item)==0||!n.optString("text").equals("🎒 사용: "+item.optString("name")))continue;
+      try{long delta=Instant.parse(n.optString("date")).toEpochMilli()-Instant.parse(item.optString("usedDate")).toEpochMilli();if(delta>=0&&delta<=10000)matches.add(item);}catch(java.time.format.DateTimeParseException ignored){}
+    }
+    if(matches.size()!=1)throw new Exception("이 알림의 원본 보상을 하나로 확인할 수 없어 지급하지 않았습니다. 사용 내역을 확인해주세요.");
+    return matches.get(0).optString("__id");
+  }
+
+  void acknowledgeNotification(String notificationId)throws Exception{
+    requireParent();String path="notifications/"+notificationId;
+    JSONObject first=db.get(path,null);
+    if(first==null||!first.optString("status").equals("대기 중"))return;
+    if(notificationStickerCount(first)==0){
+      db.transaction(tx->{JSONObject n=tx.get(path);if(n!=null&&n.optString("status").equals("대기 중"))tx.patch(path,obj("status","확인함"));});return;
+    }
+    String itemId=notificationItemId(first,notificationId),itemPath="items/"+itemId,logPath="logs/sticker-reward-"+itemId;
+    int[]granted={0};
+    db.transaction(tx->{
+      JSONObject n=tx.get(path),item=tx.get(itemPath),prior=tx.get(logPath);
+      if(n==null||!n.optString("status").equals("대기 중"))return;
+      if(item==null||!item.optString("status").equals("사용 후"))throw new Exception("사용된 원본 보상을 확인할 수 없습니다.");
+      int count=stickerRewardCount(item);if(count==0)throw new Exception("스티커 지급 보상이 아닙니다.");
+      if(prior!=null||!item.optString("stickerGrantLogId").isEmpty()){tx.patch(path,obj("status","확인함","itemId",itemId));return;}
+      List<JSONObject>all=tx.query("boards",null,null);all.sort(Comparator.comparingInt(b->b.optInt("round")));JSONObject board=null;
+      for(JSONObject b:all)if(b.optString("status").equals("진행중")||b.optString("status").equals("완료")){board=b;break;}
+      if(board==null)throw new Exception("진행 중인 스티커판을 먼저 만들어주세요. 보상은 확인 대기로 유지됩니다.");
+      int round=board.optInt("round");List<JSONObject>logs=tx.query("logs","round",round);int before=sum(logs);String date=now();granted[0]=round;
+      tx.set(logPath,obj("round",round,"date",date,"reason","🎁 랜덤박스 스티커 "+count+"장","detail","부모님 확인으로 지급","executor","시스템","score",count,"rewardSource","random-box-stickers","sourceItemId",itemId));
+      tx.patch(itemPath,obj("stickerApprovalStatus","지급 완료","stickerGrantLogId","sticker-reward-"+itemId,"stickerGrantedRound",round,"stickerApprovedAt",date));
+      tx.patch(path,obj("status","확인함","itemId",itemId,"stickerCount",count,"stickerGrantedRound",round,"confirmedAt",date));
+      tx.patch(board.optString("__path"),obj("stickerRewardRevision",board.optInt("stickerRewardRevision")+1));
+      JSONArray boxes=array(board,"luckyBoxes");if(boxes.length()==0&&board.optInt("luckyStep")>0)boxes=arr(obj("step",board.optInt("luckyStep"),"text",board.optString("luckyText")));
+      for(int k=0;k<boxes.length();k++){JSONObject box=boxes.getJSONObject(k);int step=box.optInt("step");if(step>0&&before<step&&before+count>=step){JSONObject ticket=item(round,"룰렛 추첨권","랜덤박스");put(ticket,"prizesSnapshot",box.optString("text"));tx.set("items/sticker-reward-"+itemId+"-lucky-"+step,ticket);}}
+    });
+    if(granted[0]>0)complete(granted[0]);
+  }
+
   void use(String id, int amount, int max) throws Exception {
     if (parent) throw new Exception("자녀 화면에서 사용할 수 있습니다.");
     String remainder = id + "-remainder", notification = "use-" + id;
@@ -302,7 +354,9 @@ final class Store {
           JSONObject it = tx.get("items/" + id), ticket = tx.get("items/retry_" + id);
           if (it == null || !it.optString("status").equals("사용 전")) return;
           String name = it.optString("name");
+          int stickerCount=stickerRewardCount(it);
           JSONObject update = obj("status", "사용 후", "usedDate", now());
+          if(stickerCount>0){put(update,"stickerApprovalStatus","대기 중");put(update,"stickerCount",stickerCount);}
           if (retry(it)) {
             if (ticket == null) {
               JSONObject t = item(it.optInt("round"), "룰렛 추첨권", "랜덤박스");
@@ -311,7 +365,7 @@ final class Store {
               tx.set("items/retry_" + id, t);
             }
             put(update, "replacementTicketId", "retry_" + id);
-          } else if (amount > 0 && max > 0) {
+          } else if (stickerCount==0 && amount > 0 && max > 0) {
             if (amount > max) throw new Exception("사용량이 남은 양보다 많습니다.");
             put(update, "name", name.replaceFirst(String.valueOf(max), String.valueOf(amount)));
             if (it.optBoolean("gameRollover")) put(update, "gameMinutes", amount);
@@ -338,6 +392,7 @@ final class Store {
                   "item_use",
                   "text",
                   "🎒 사용: " + name + (retry(it) ? " → 룰렛 추첨권 1장 지급" : ""),
+                  "itemId",id,"stickerCount",stickerCount,
                   "childName",
                   actor(),
                   "date",
@@ -570,13 +625,9 @@ final class Store {
     selectedRound = created[0];
   }
 
-  void dismissNotifications() throws Exception {
+  void dismissNotifications(List<String> notificationIds) throws Exception {
     requireParent();
-    db.transaction(
-        tx -> {
-          List<JSONObject> list = tx.query("notifications", "status", "대기 중");
-          for (JSONObject n : list) tx.patch(n.optString("__path"), obj("status", "확인함"));
-        });
+    for(String id:new LinkedHashSet<>(notificationIds))acknowledgeNotification(id);
   }
 
   void password(String old, String value) throws Exception {
