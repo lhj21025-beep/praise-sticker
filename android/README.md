@@ -1,6 +1,6 @@
 # 칭찬 스티커 — native Android
 
-Android 8.0+ (minSdk 26), targetSdk 35, package `kr.family.praisesticker`, version 1.0.0 (code 1).
+Android 8.0+ (minSdk 26), targetSdk 35, package `kr.family.praisesticker`, version 1.1.0 (code 2).
 
 This is a native Java/Android View application. It contains no WebView, HTML assets, JavaScript engine, browser intent, or remote page wrapper. The 12 board themes and roulette wheel use Android Canvas; forms and dialogs use Android controls.
 
@@ -19,7 +19,7 @@ Use Java 17 (runtime sufficient with ECJ), Android platform 35 (`platform-35_r02
 ```
 ANDROID_TOOL_DIR=/absolute/android-tools \
 SIGNING_DIR=/absolute/private-signing \
-APK_OUTPUT=/absolute/PraiseSticker_Native_v1.0.0.apk \
+APK_OUTPUT=/absolute/PraiseSticker_Native_v1.1.0.apk \
 bash build.sh
 ```
 
@@ -44,3 +44,7 @@ Tests additionally use org.json 20240303 as `json.jar` in the tools directory. T
 ## Platform differences
 
 The web's layout, colors, controls and flows are recreated, not pixel-identical. Font/emoji rendering, native save/share dialogs and individual Canvas theme animations differ. The app updates via a newly signed APK; web deployments do not replace installed native code. Both use the same family data. See PARITY.md before every improvement.
+
+## 1.1.0 — parent-confirmed sticker rewards
+
+Child use marks random-box sticker rewards pending without stamping. Parent confirmation atomically grants the stated number to the active board, acknowledges the notification and marks the source item. Stable source IDs prevent duplicate grants across web and native, including retries and deleted logs. These are system bonus stamps: no extra streak/mission bonus or lifetime increment. Threshold tickets and completion rewards still apply. Only visible notifications are bulk-confirmed. Older pending notifications are supported when a unique used source can be identified; already-confirmed notifications are not retroactively awarded.

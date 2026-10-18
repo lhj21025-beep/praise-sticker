@@ -262,6 +262,51 @@ public class StoreTest {
     check(
         db.docs.get("meta/state").optInt("lifetimeScore") == 777,
         "concurrent external change preserved by precondition");
+    db = new Fake(); s = fixture(db);
+    db.seed("items/stickers", Store.item(24, "칭찬스티커 3개 찍어주기", "랜덤박스"));
+    s.use("stickers", 1, 3);
+    check(!db.docs.containsKey("logs/sticker-reward-stickers"), "child use waits for parent");
+    check(!db.docs.containsKey("items/stickers-remainder"), "sticker reward cannot be split");
+    try { s.acknowledgeNotification("use-stickers"); throw new AssertionError(); }
+    catch (Exception expected) {}
+    s.parent = true;
+    db.failCommit = true;
+    try { s.acknowledgeNotification("use-stickers"); throw new AssertionError(); }
+    catch (java.io.IOException expected) {}
+    check(db.docs.get("notifications/use-stickers").optString("status").equals("대기 중"), "failed approval stays pending");
+    check(!db.docs.containsKey("logs/sticker-reward-stickers"), "failed approval grants nothing");
+    db.failCommit = false; db.abortOnce = true;
+    db.seed("logs/before", obj("round",25,"score",3,"executor","부모"));
+    s.acknowledgeNotification("use-stickers");
+    check(db.docs.get("logs/sticker-reward-stickers").optInt("score")==3, "approval grants exactly three");
+    check(db.docs.get("logs/sticker-reward-stickers").optInt("round")==25, "approval uses active round");
+    check(db.docs.containsKey("items/sticker-reward-stickers-lucky-5"), "reward crossing threshold creates ticket");
+    check(db.docs.get("meta/state").optInt("lifetimeScore")==0, "system reward preserves lifetime rules");
+    count=db.docs.size(); s.acknowledgeNotification("use-stickers");
+    check(db.docs.size()==count, "repeat approval no-op");
+    JSONObject duplicate=new JSONObject(db.docs.get("notifications/use-stickers").toString());
+    put(duplicate,"status","대기 중"); db.seed("notifications/duplicate",duplicate);
+    db.docs.remove("logs/sticker-reward-stickers");
+    s.acknowledgeNotification("duplicate");
+    check(!db.docs.containsKey("logs/sticker-reward-stickers"), "source marker prevents regrant after log deletion");
+    db = new Fake(); s = fixture(db);
+    db.seed("items/legacy",Store.item(24,"칭찬스티커 3장","랜덤박스"));
+    s.use("legacy",0,0); s.parent=true;
+    JSONObject legacy=db.docs.remove("notifications/use-legacy"); legacy.remove("itemId");
+    db.seed("notifications/old-auto-id",legacy);
+    put(db.docs.get("boards/25"),"targetScore",3);
+    s.acknowledgeNotification("old-auto-id");
+    check(db.docs.get("logs/sticker-reward-legacy").optInt("score")==3,"legacy pending use can be confirmed");
+    check(db.docs.containsKey("items/board-completion-25"),"sticker reward completes board");
+    db.seed("notifications/later",obj("status","대기 중","kind","roulette","text","칭찬스티커 3장"));
+    s.dismissNotifications(Arrays.asList("old-auto-id"));
+    check(db.docs.get("notifications/later").optString("status").equals("대기 중"),"bulk ignores unseen arrivals");
+    db = new Fake(); s = fixture(db);
+    db.seed("items/wait",Store.item(25,"스티커 3장","랜덤박스"));s.use("wait",0,0);s.parent=true;
+    put(db.docs.get("boards/25"),"status","보상 수령 완료");
+    try { s.acknowledgeNotification("use-wait"); throw new AssertionError(); } catch(Exception expected){}
+    check(db.docs.get("notifications/use-wait").optString("status").equals("대기 중"),"no active board preserves pending reward");
+    check(Store.stickerRewardCount(Store.item(25,"게임 3분","랜덤박스"))==0,"other numeric rewards excluded");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

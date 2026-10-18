@@ -591,7 +591,7 @@
       <ul id="notifyPopupList" class="space-y-2 max-h-72 overflow-y-auto"></ul>
       <div class="flex gap-2">
         <button onclick="closeModal('notifyPopupModal')" class="px-4 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl active:scale-95 transition">나중에</button>
-        <button onclick="dismissAllNotificationsUI()" class="flex-1 py-4 bg-amber-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">확인했어요</button>
+        <button id="notifyConfirmAll" onclick="dismissAllNotificationsUI()" class="flex-1 py-4 bg-amber-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition">확인했어요</button>
       </div>
     </div>
   </div>
@@ -816,7 +816,7 @@
         pendingRequests.sort((a,b) => a.date < b.date ? -1 : 1);
 
         const notifSnap = await db.collection('notifications').where('status','==','대기 중').get();
-        notifSnap.forEach(d => { const n = d.data(); pendingNotifications.push({ id: d.id, kind: n.kind, text: n.text, childName: n.childName || '', date: fmtShort(n.date) }); });
+        notifSnap.forEach(d => { const n = d.data(); pendingNotifications.push({ id: d.id, kind: n.kind, text: n.text, childName: n.childName || '', date: fmtShort(n.date), stickerCount: notificationStickerCount(n) }); });
         pendingNotifications.sort((a,b) => a.date < b.date ? -1 : 1);
       }
 
@@ -1036,6 +1036,33 @@
       return item.type === '랜덤박스' && /^(?:룰렛)?다시(?:돌리기|뽑기)(?:권|1회|1회권)?$/.test(name);
     }
 
+    function stickerRewardCount(item) {
+      if (!item || item.type !== '랜덤박스') return 0;
+      const m = String(item.name || '').replace(/\s+/g, '').match(/^(?:칭찬)?스티커([1-9]\d{0,2})(?:장|개)(?:찍어주기|찍기|추가|지급)?$/);
+      return m ? Number(m[1]) : 0;
+    }
+
+    function notificationStickerCount(n) {
+      if (!n || n.kind !== 'item_use') return 0;
+      return stickerRewardCount({ type: '랜덤박스', name: String(n.text || '').replace(/^🎒 사용:\s*/, '') });
+    }
+
+    // Older clients did not link the use notification. Match only a unique used
+    // item with exactly the same name and a matching timestamp; never guess.
+    async function resolveNotificationItemId(n, notificationId) {
+      if (n.itemId) return n.itemId;
+      if (notificationId.startsWith('use-')) return notificationId.slice(4);
+      if (!notificationStickerCount(n)) return null;
+      const snap = await db.collection('items').where('status', '==', '사용 후').get();
+      const matches = snap.docs.filter(d => {
+        const item = d.data();
+        const delta = new Date(n.date).getTime() - new Date(item.usedDate).getTime();
+        return stickerRewardCount(item) > 0 && n.text === `🎒 사용: ${item.name}` && delta >= 0 && delta <= 10000;
+      });
+      if (matches.length !== 1) throw new Error('이 알림의 원본 보상을 하나로 확인할 수 없어 지급하지 않았습니다. 사용 내역을 확인해주세요.');
+      return matches[0].id;
+    }
+
     async function useItemSplit(itemId, childName, useAmount, maxAmount) {
       await ensureAuth();
       const ref = db.collection('items').doc(itemId);
@@ -1047,6 +1074,7 @@
         if (!snap.exists || snap.data().status !== '사용 전') return;
         const it = snap.data();
         const retry = isRouletteRetry(it);
+        const stickerCount = stickerRewardCount(it);
         const existingTicket = retry ? await tx.get(ticketRef) : null;
         const now = new Date().toISOString();
         let usedName = it.name;
@@ -1057,7 +1085,7 @@
             status: '사용 전', usedDate: '', type: '랜덤박스',
             prizesSnapshot: it.prizesSnapshot || '', sourceRetryItemId: itemId
           });
-        } else if (useAmount && maxAmount && useAmount < maxAmount) {
+        } else if (!stickerCount && useAmount && maxAmount && useAmount < maxAmount) {
           usedName = it.name.replace(String(maxAmount), String(useAmount));
           const remainAmount = maxAmount - useAmount;
           tx.set(remainingRef, {
@@ -1071,11 +1099,12 @@
         tx.update(ref, {
           name: usedName, status:'사용 후', usedDate: now,
           ...(retry ? { replacementTicketId: ticketRef.id } : {}),
+          ...(stickerCount ? { stickerApprovalStatus: '대기 중', stickerCount } : {}),
           ...(isGameRollover && useAmount ? { gameRollover: true, gameMinutes: useAmount } : {})
         });
         tx.set(notificationRef, {
           kind: 'item_use', text: `🎒 사용: ${usedName}${retry ? ' → 룰렛 추첨권 1장 지급' : ''}`,
-          childName: childName || '', date: now, status: '대기 중'
+          childName: childName || '', date: now, status: '대기 중', itemId, stickerCount
         });
       });
       return getAppData(null, 'child');
@@ -1103,12 +1132,83 @@
       return getAppData(null, 'child');
     }
 
-    async function dismissAllNotifications(role) {
+    async function acknowledgeNotification(notificationId, role) {
+      if (role !== 'parent') throw new Error('부모 화면에서만 확인할 수 있습니다.');
       await ensureAuth();
-      const snap = await db.collection('notifications').where('status','==','대기 중').get();
-      const batch = db.batch();
-      snap.forEach(d => batch.update(d.ref, { status: '확인함' }));
-      await batch.commit();
+      const notificationRef = db.collection('notifications').doc(notificationId);
+      const initial = await notificationRef.get();
+      if (!initial.exists || initial.data().status !== '대기 중') return;
+      const initialData = initial.data();
+      const itemId = notificationStickerCount(initialData) ? await resolveNotificationItemId(initialData, notificationId) : null;
+      if (!itemId) {
+        await db.runTransaction(async tx => {
+          const snap = await tx.get(notificationRef);
+          if (snap.exists && snap.data().status === '대기 중') tx.update(notificationRef, { status: '확인함' });
+        });
+        return;
+      }
+      const itemRef = db.collection('items').doc(itemId);
+      const logRef = db.collection('logs').doc(`sticker-reward-${itemId}`);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const boards = await db.collection('boards').orderBy('round').get();
+        const active = boards.docs.find(d => ['진행중', '완료'].includes(d.data().status));
+        const logs = active ? await db.collection('logs').where('round', '==', active.data().round).get() : null;
+        let grantedRound = null;
+        try {
+          await db.runTransaction(async tx => {
+            const [notification, source, priorLog, board, ...latestLogs] = await Promise.all([
+              tx.get(notificationRef), tx.get(itemRef), tx.get(logRef),
+              active ? tx.get(active.ref) : Promise.resolve(null),
+              ...(logs ? logs.docs.map(d => tx.get(d.ref)) : [])
+            ]);
+            if (!notification.exists || notification.data().status !== '대기 중') return;
+            if (!source.exists || source.data().status !== '사용 후') throw new Error('사용된 원본 보상을 확인할 수 없습니다.');
+            const item = source.data();
+            const count = stickerRewardCount(item);
+            if (!count) throw new Error('스티커 지급 보상이 아닙니다.');
+            if (priorLog.exists || item.stickerGrantLogId) {
+              tx.update(notificationRef, { status: '확인함', itemId });
+              return;
+            }
+            if (!board || !board.exists || !['진행중', '완료'].includes(board.data().status)) throw new Error('진행 중인 스티커판을 먼저 만들어주세요. 보상은 확인 대기로 유지됩니다.');
+            const currentBoard = board.data();
+            if ((currentBoard.stickerRewardRevision || 0) !== (active.data().stickerRewardRevision || 0)) {
+              const error = new Error('다른 기기에서 처리 중입니다.'); error.code = 'reward-conflict'; throw error;
+            }
+            const before = latestLogs.reduce((sum, d) => sum + (d.exists ? Number(d.data().score) : 0), 0);
+            const now = new Date().toISOString();
+            grantedRound = currentBoard.round;
+            tx.set(logRef, { round: grantedRound, date: now, reason: `🎁 랜덤박스 스티커 ${count}장`, detail: '부모님 확인으로 지급', executor: '시스템', score: count, rewardSource: 'random-box-stickers', sourceItemId: itemId });
+            tx.update(itemRef, { stickerApprovalStatus: '지급 완료', stickerGrantLogId: logRef.id, stickerGrantedRound: grantedRound, stickerApprovedAt: now });
+            tx.update(notificationRef, { status: '확인함', itemId, stickerCount: count, stickerGrantedRound: grantedRound, confirmedAt: now });
+            tx.update(active.ref, { stickerRewardRevision: (currentBoard.stickerRewardRevision || 0) + 1 });
+            const boxes = Array.isArray(currentBoard.luckyBoxes) ? currentBoard.luckyBoxes : (currentBoard.luckyStep ? [{ step: currentBoard.luckyStep, text: currentBoard.luckyText }] : []);
+            for (const box of boxes) {
+              const step = Number(box.step);
+              if (step > 0 && before < step && before + count >= step) {
+                tx.set(db.collection('items').doc(`sticker-reward-${itemId}-lucky-${step}`), { round: grantedRound, name: '룰렛 추첨권', obtainedDate: now, status: '사용 전', usedDate: '', type: '랜덤박스', prizesSnapshot: box.text || '' });
+              }
+            }
+          });
+          if (grantedRound !== null) await grantRewardIfEligible(grantedRound);
+          return;
+        } catch (error) {
+          if (error.code === 'reward-conflict' && attempt < 3) continue;
+          throw error;
+        }
+      }
+    }
+
+    async function confirmNotification(notificationId, role) {
+      await acknowledgeNotification(notificationId, role);
+      return getAppData(null, role);
+    }
+
+    async function dismissAllNotifications(role, notificationIds) {
+      if (role !== 'parent') throw new Error('부모 화면에서만 확인할 수 있습니다.');
+      // Only acknowledge notifications the parent actually saw.
+      if (!Array.isArray(notificationIds)) throw new Error('알림을 다시 열고 확인해주세요.');
+      for (const id of [...new Set(notificationIds)]) await acknowledgeNotification(id, role);
       return getAppData(null, role);
     }
 
@@ -1470,7 +1570,7 @@
       addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
-      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, updateLogEntry, saveGameRollover
+      getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, confirmNotification, updateLogEntry, saveGameRollover
     };
 
     function __makeRunner() {
@@ -1786,14 +1886,18 @@
     }
 
     // 🔔 알림 팝업 열기 + 확인 처리
+    let displayedNotificationIds = [];
     function openNotifyPopup(notifications) {
+      displayedNotificationIds = notifications.map(n => n.id);
       const list = document.getElementById('notifyPopupList');
       list.innerHTML = notifications.map(n => `
         <li class="bg-amber-50 border border-amber-100 rounded-xl p-3">
-          <p class="font-bold text-sm text-slate-700">${n.text}</p>
-          <p class="text-[10px] text-slate-400 font-bold mt-1">${n.childName} · ${n.date}</p>
+          <p class="font-bold text-sm text-slate-700">${escapeHtml(n.text)}</p>
+          <p class="text-[10px] text-slate-400 font-bold mt-1">${escapeHtml(n.childName)} · ${n.date}</p>
+          ${n.stickerCount ? `<p class="text-xs text-amber-700 mt-2">진행 중인 판에 ${n.stickerCount}장 지급 · 한 번만 적용</p><button onclick="confirmNotificationUI('${n.id}')" class="mt-2 w-full py-3 rounded-xl bg-indigo-500 text-white font-bold">확인하고 ${n.stickerCount}장 지급</button>` : ''}
         </li>
       `).join('');
+      document.getElementById('notifyConfirmAll').innerText = notifications.some(n => n.stickerCount) ? '모두 확인하고 스티커 지급' : '모두 확인했어요';
       document.getElementById('notifyPopupModal').classList.add('active');
     }
 
@@ -1807,9 +1911,24 @@
           app = res;
           closeModal('notifyPopupModal');
           isDismissingNotifications = false;
+          renderBoard();
         })
         .withFailureHandler(err => { showToast("오류: " + err.message); isDismissingNotifications = false; })
-        .dismissAllNotifications(currentRole);
+        .dismissAllNotifications(currentRole, displayedNotificationIds.slice());
+    }
+
+    function confirmNotificationUI(id) {
+      if (isDismissingNotifications) return;
+      isDismissingNotifications = true;
+      google.script.run
+        .withSuccessHandler(res => {
+          app = res; isDismissingNotifications = false; renderBoard();
+          if (app.pendingNotifications.length) openNotifyPopup(app.pendingNotifications);
+          else closeModal('notifyPopupModal');
+          showToast('확인 완료! 스티커판에 반영했어요.');
+        })
+        .withFailureHandler(err => { isDismissingNotifications = false; showToast('오류: ' + err.message); })
+        .confirmNotification(id, currentRole);
     }
 
     function showLoadErrorScreen(message) {
@@ -3227,6 +3346,9 @@
     function handleItemClick(id, name, btn) {
       if (name === '룰렛 추첨권') {
         openRoulette(id);
+      } else if (stickerRewardCount((app.items || []).find(i => i.id === id))) {
+        if (!confirm('스티커 보상을 사용 요청할까요? 부모님이 확인하면 진행 중인 판에 지급됩니다.')) return;
+        callUseSplitApi(id, btn, null, null);
       } else if (isRouletteRetry({ name, type: '랜덤박스' })) {
         if (!confirm('룰렛 다시 돌리기를 사용하고 추첨권 1장을 받을까요?')) return;
         callUseSplitApi(id, btn, null, null);

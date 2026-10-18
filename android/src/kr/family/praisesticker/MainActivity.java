@@ -660,6 +660,7 @@ public class MainActivity extends Activity {
       roulette(i);
       return;
     }
+    if(Store.stickerRewardCount(i)>0){confirm("스티커 보상을 사용 요청할까요? 부모님이 확인하면 진행 중인 판에 지급됩니다.",()->change("스티커 보상 사용 요청",()->s.use(itemId,0,0)));return;}
     if (Store.retry(i)) {
       confirm("다시 돌리기를 사용하고 추첨권 1장을 받을까요?", () -> change("추첨권 지급", () -> s.use(itemId, 0, 0)));
       return;
@@ -1024,27 +1025,18 @@ public class MainActivity extends Activity {
   }
 
   void showNotifications() {
-    LinearLayout c = col();
-    for (JSONObject n : s.notifications) {
-      LinearLayout cell = card(c);
-      add(cell, text(n.optString("text"), 16, INK, true));
-      add(
-          cell,
-          text(
-              n.optString("childName") + " · " + Store.date(n.optString("date")),
-              12,
-              MUTED,
-              false));
+    LinearLayout c=col(); List<JSONObject> shown=new ArrayList<>(s.notifications);
+    List<String> ids=new ArrayList<>();for(JSONObject n:shown)ids.add(n.optString("__id"));
+    AlertDialog d=dialog("🔔 새로운 소식",c);boolean hasStickers=false;
+    for(JSONObject n:shown){
+      LinearLayout cell=card(c);add(cell,text(n.optString("text"),16,INK,true));
+      add(cell,text(n.optString("childName")+" · "+Store.date(n.optString("date")),12,MUTED,false));
+      int count=Store.notificationStickerCount(n);
+      if(count>0){hasStickers=true;add(cell,text("진행 중인 판에 "+count+"장 지급 · 한 번만 적용",13,PURPLE,true));
+        btn(cell,"확인하고 "+count+"장 지급",PURPLE,()->{d.dismiss();change("스티커 지급",()->s.acknowledgeNotification(n.optString("__id")));});
+      }
     }
-    AlertDialog d = dialog("🔔 새로운 소식", c);
-    btn(
-        c,
-        "모두 확인했어요",
-        0xfff59e0b,
-        () -> {
-          d.dismiss();
-          change("알림 확인", s::dismissNotifications);
-        });
+    btn(c,hasStickers?"모두 확인하고 스티커 지급":"모두 확인했어요",0xfff59e0b,()->{d.dismiss();change("알림 확인",()->s.dismissNotifications(ids));});
   }
 
   void history() {
@@ -1491,7 +1483,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.0.0\n"
+            "칭찬 스티커 1.1.0\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",
