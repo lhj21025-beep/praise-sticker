@@ -421,6 +421,7 @@ public class MainActivity extends Activity {
         new GradientDrawable(
             GradientDrawable.Orientation.TL_BR, new int[] {0xff6366f1, 0xff4338ca}));
     add(body, header);
+    btn(header,"📅 일별 스티커",PURPLE,()->dailyStickers(Store.day(Store.now())));
     add(header, text((s.parent ? "👨‍👩‍👦 엄빠" : "🌱 강천") + "  ·  " + s.title(), 17, WHITE, true));
     int total = s.state.optInt("lifetimeScore");
     ProgressBar lv = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -550,6 +551,27 @@ public class MainActivity extends Activity {
     return v;
   }
 
+  interface DayChoice { void choose(String day); }
+  void pickStickerDate(String initial, DayChoice choice) {
+    LocalDate day=LocalDate.parse(initial);
+    DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->choice.choose(LocalDate.of(y,m+1,d).toString()),day.getYear(),day.getMonthValue()-1,day.getDayOfMonth());
+    picker.getDatePicker().setMaxDate(System.currentTimeMillis());picker.show();
+  }
+  void dailyStickers(String day) {
+    List<JSONObject> rows=new ArrayList<>();
+    run("일별 기록 불러오는 중…",()->{
+      for(JSONObject l:s.db.query("logs",null,null,null)) if(l.optString("effectiveDate",Store.day(l.optString("date"))).equals(day))rows.add(l);
+      Store.sortDate(rows,"date",true);
+    },()->{
+      LinearLayout c=col();AlertDialog dialog=dialog("📅 일별 스티커",c);
+      btn(c,"📅 "+day,PURPLE,()->pickStickerDate(day,selected->{dialog.dismiss();dailyStickers(selected);}));
+      int gain=0,loss=0;for(JSONObject l:rows){gain+=Math.max(0,l.optInt("score"));loss+=Math.min(0,l.optInt("score"));}
+      add(c,text("획득 "+gain+"개 / 차감 "+loss+"개 / 순증가 "+(gain+loss)+"개",18,INK,true));
+      if(rows.isEmpty())add(c,text("이 날짜의 기록이 없습니다.",14,MUTED,false));
+      for(JSONObject l:rows){LinearLayout cell=card(c);add(cell,text(l.optString("reason")+" · "+l.optInt("score")+"개",16,INK,true));add(cell,text(l.optString("detail"),14,MUTED,false));add(cell,text(l.optInt("round")+"회차 · "+(l.optString("executor").equals("시스템")?"보너스/시스템":l.optString("executor")),12,MUTED,false));}
+    });
+  }
+
   void stampForm(boolean penalty) {
     List<String> names = reasonNames(penalty);
     if (names.isEmpty()) {
@@ -557,6 +579,9 @@ public class MainActivity extends Activity {
       return;
     }
     LinearLayout c = col();
+    final String[] effectiveDate={Store.day(Store.now())};
+    Button dateButton=button("📅 스티커 날짜: "+effectiveDate[0],PURPLE,()->{});add(c,dateButton);
+    dateButton.setOnClickListener(v->pickStickerDate(effectiveDate[0], day->{effectiveDate[0]=day;dateButton.setText("📅 스티커 날짜: "+day);}));
     Spinner reason = spinner(c, names);
     EditText detail = input(c, "상세 설명 (선택)", "", false);
     EditText count = input(c, "도장 개수", "1", true);
@@ -582,7 +607,7 @@ public class MainActivity extends Activity {
             if (n < 1 || n > 100) throw new Exception("1~100개 사이로 입력해주세요.");
             String r = reason.getSelectedItem().toString(), dt = detail.getText().toString();
             d.dismiss();
-            change("도장", () -> s.stamp(r, dt, penalty ? -n : n, op));
+            change("도장", () -> s.stamp(r, dt, penalty ? -n : n, op, effectiveDate[0]));
           } catch (Exception e) {
             error(e);
           }
@@ -1010,6 +1035,9 @@ public class MainActivity extends Activity {
       return;
     }
     LinearLayout c = col();
+    final String[] effectiveDate={Store.day(Store.now())};
+    Button dateButton=button("📅 스티커 날짜: "+effectiveDate[0],PURPLE,()->{});add(c,dateButton);
+    dateButton.setOnClickListener(v->pickStickerDate(effectiveDate[0], day->{effectiveDate[0]=day;dateButton.setText("📅 스티커 날짜: "+day);}));
     Spinner reason = spinner(c, names);
     EditText detail = input(c, "어떤 일을 했나요?", "", false);
     AlertDialog d = dialog("🙋 칭찬 도장 요청", c);
@@ -1550,7 +1578,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.3.1\n"
+            "칭찬 스티커 1.4.0\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",
