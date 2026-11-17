@@ -358,6 +358,12 @@ public class StoreTest {
     db.seed("items/retry-parent",Store.item(25,"룰렛 다시돌리기","랜덤박스"));
     s.parentUseReward("retry-parent","");
     check(db.docs.containsKey("items/retry_retry-parent"),"parent retry creates ticket");
+    db=new Fake();s=fixture(db);s.parent=true;
+    s.stamp("숙제","어제 숙제",5,"dated","2026-10-01");
+    check(db.docs.get("logs/dated").optString("effectiveDate").equals("2026-10-01"),"selected effective day stored");
+    check(db.docs.get("logs/dated").optInt("round")==25,"dated stamp stays on active board");
+    check(db.docs.get("logs/dated-bonus-0").optString("effectiveDate").equals("2026-10-01"),"bonus shares effective day");
+    check(!db.docs.get("logs/dated").optString("date").startsWith("2026-10-01"),"actual creation date preserved");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

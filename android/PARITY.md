@@ -37,3 +37,5 @@ Parent game notices live on the used item (`usedByRole`, `parentUseNoticeStatus`
 1.3.0: Parent redemption supports non-game prizes (whole item) and optional useReason, visible in used history and child notices. Retry rewards exchange tickets; sticker rewards retain parent confirmation before stamps. Roulette tickets retain the child draw flow. Game partial use remains supported.
 
 1.3.1: Both used inventory tabs sort by actual usedDate descending (missing dates last). Inventory title shows combined unused game minutes across both boxes as HH시간MM분. Used items are excluded; partially used remainder items are included.
+
+1.4.0: Effective sticker date defaults to KST today and is independent of actual date and current board; streak bonuses share effectiveDate. Daily all-round history for both roles includes gains, losses, net and system rewards. Legacy logs use KST creation day. Push deployment remains pending Firebase administrative access; this build does not claim background push support.

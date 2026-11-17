@@ -196,6 +196,7 @@
         <h1 class="text-2xl font-black tracking-tighter">✨ 칭찬스티커</h1>
         <div class="flex flex-wrap gap-2">
           <span class="text-[10px] font-bold bg-white/20 px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/30 transition shadow-sm flex items-center" id="userTitle" onclick="openLevelModal()">...</span>
+          <button onclick="openDailyStickers()" class="text-sm font-bold p-2">📅 일별 스티커</button>
           <button onclick="openItemShop()" class="text-[10px] font-bold bg-pink-500/90 px-3 py-1.5 rounded-full cursor-pointer hover:bg-pink-50 transition shadow-sm active:scale-95 flex items-center">🎒 보관함</button>
           
           <button onclick="openWishlistModal()" class="text-[10px] font-bold bg-amber-500 px-3 py-1.5 rounded-full cursor-pointer hover:bg-amber-600 transition shadow-sm active:scale-95 flex items-center text-white">🙏 소원수리함</button>
@@ -274,6 +275,7 @@
             <select id="reasonSelect" class="flex-1 p-4 rounded-2xl border-none shadow-sm font-bold text-slate-700 outline-none" onchange="vibrate()"></select>
             <button id="btnNewReason" onclick="promptAddReason()" class="bg-slate-200 px-4 rounded-2xl text-xs font-black text-slate-500 whitespace-nowrap active:scale-95 transition">신규 사유</button>
           </div>
+          <label class="block text-sm">스티커 날짜 <input type="date" id="stampDate" class="p-2 rounded-lg"></label>
           <input type="text" id="detailInput" class="w-full p-4 rounded-2xl border-none shadow-sm text-sm" placeholder="상세 설명을 적어주세요 (선택)">
         </div>
         
@@ -889,7 +891,33 @@
       });
     }
 
-    async function addStampRecord(round, reason, detail, score, executor, role) {
+    function stickerToday() { return new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Seoul'}).format(new Date()); }
+    function validStickerDate(day) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || isNaN(Date.parse(day+'T00:00:00Z')) || new Date(day+'T00:00:00Z').toISOString().slice(0,10)!==day || day > stickerToday()) throw new Error('오늘 또는 이전의 올바른 날짜를 선택해주세요.');
+      return day;
+    }
+    async function getDailyStickers(day) {
+      await ensureAuth(); validStickerDate(day);
+      const snap = await db.collection('logs').get();
+      const rows = snap.docs.map(d=>({id:d.id,...d.data()})).filter(l=> (l.effectiveDate || (l.date ? new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date(l.date)) : '')) === day).sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
+      return rows;
+    }
+    let dailyQueryVersion = 0;
+    function openDailyStickers() {
+      let modal=document.getElementById('dailyStickerModal');
+      if(!modal){modal=document.createElement('div');modal.id='dailyStickerModal';modal.className='modal';modal.innerHTML='<div class="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto"><div class="flex justify-between"><h3 class="font-bold">📅 일별 스티커</h3><button onclick="closeModal(\'dailyStickerModal\')">✕</button></div><input type="date" id="dailyStickerDate" class="border p-2 my-3" onchange="loadDailyStickers()"><div id="dailyStickerResult"></div></div>';document.body.appendChild(modal);}
+      document.getElementById('dailyStickerDate').value=stickerToday();openModal('dailyStickerModal');loadDailyStickers();
+    }
+    async function loadDailyStickers() {
+      const serial=++dailyQueryVersion, out=document.getElementById('dailyStickerResult');out.innerText='불러오는 중…';
+      try {const rows=await getDailyStickers(document.getElementById('dailyStickerDate').value);if(serial!==dailyQueryVersion)return;
+        const positive=rows.reduce((n,l)=>n+Math.max(0,Number(l.score)||0),0), negative=rows.reduce((n,l)=>n+Math.min(0,Number(l.score)||0),0);
+        out.innerHTML='<p class="font-bold mb-4">획득 '+positive+'개 / 차감 '+negative+'개 / 순증가 '+(positive+negative)+'개</p>'+ (rows.length?rows.map(l=>'<div class="border-b py-3"><b>'+escapeHtml(l.reason||'')+' · '+(Number(l.score)>0?'+':'')+Number(l.score)+'개</b><p>'+escapeHtml(l.detail||'')+'</p><small>'+l.round+'회차 · '+(l.executor==='시스템'?'보너스/시스템':escapeHtml(l.executor||''))+'</small></div>').join(''):'이 날짜의 기록이 없습니다.');
+      }catch(e){if(serial===dailyQueryVersion)out.innerText=e.message;}
+    }
+
+    async function addStampRecord(round, reason, detail, score, executor, role, effectiveDate) {
+      effectiveDate = validStickerDate(effectiveDate || stickerToday());
       await ensureAuth();
       const logsSnap = await db.collection('logs').where('round','==',round).get();
       let curScore = 0;
@@ -917,7 +945,7 @@
 
       const now = new Date();
       const addedIds = [];
-      const doc1 = await db.collection('logs').add({ round, date: now.toISOString(), reason: finalReason, detail: detail || '', executor, score: finalScore });
+      const doc1 = await db.collection('logs').add({ round, effectiveDate, date: now.toISOString(), reason: finalReason, detail: detail || '', executor, score: finalScore });
       addedIds.push(doc1.id);
 
       let bonusCount = 0;
@@ -926,7 +954,7 @@
         let nextMilestone = (Math.floor(streakScoreBefore / 5) + 1) * 5;
         let bonusTs = now.getTime() + 1000;
         while (nextMilestone <= streakScoreAfter) {
-          const bonusDoc = await db.collection('logs').add({ round, date: new Date(bonusTs).toISOString(), reason: `🔥 연속 칭찬 ${nextMilestone}회 보너스!`, detail:'대단해요!', executor:'시스템', score:1 });
+          const bonusDoc = await db.collection('logs').add({ round, effectiveDate, date: new Date(bonusTs).toISOString(), reason: `🔥 연속 칭찬 ${nextMilestone}회 보너스!`, detail:'대단해요!', executor:'시스템', score:1 });
           addedIds.push(bonusDoc.id);
           bonusTs += 1000;
           nextMilestone += 5;
@@ -1952,6 +1980,8 @@
     function logout() { vibrate(); localStorage.removeItem('stickerRole'); localStorage.removeItem('stickerPw'); location.reload(); }
 
     function initApp(data) {
+      document.getElementById("stampDate").value = stickerToday();
+      document.getElementById("stampDate").max = stickerToday();
       if (!data) {
         showLoadErrorScreen('서버로부터 응답을 받지 못했어요. 네트워크 상태를 확인하고 다시 시도해주세요.');
         return;
@@ -2761,7 +2791,7 @@
       document.getElementById('levelBar').style.width = `${(app.lifetimeScore % 50) * 2}%`;
       document.getElementById('detailInput').value = '';
 
-      stampQueue.push({ localId, round, reason, detail, score, executor: app.userName, role: currentRole, prevScore });
+      stampQueue.push({ effectiveDate: document.getElementById("stampDate").value || stickerToday(), localId, round, reason, detail, score, executor: app.userName, role: currentRole, prevScore });
       processStampQueue();
     }
 
@@ -2823,7 +2853,7 @@
           isSendingStamp = false;
           processStampQueue();
         })
-        .addStampRecord(job.round, job.reason, job.detail, job.score, job.executor, job.role);
+        .addStampRecord(job.round, job.reason, job.detail, job.score, job.executor, job.role, job.effectiveDate);
     }
 
     function applyPenaltyEffect() { document.getElementById('visualizer').classList.add('shake'); setTimeout(() => document.getElementById('visualizer').classList.remove('shake'), 400); }

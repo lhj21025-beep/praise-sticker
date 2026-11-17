@@ -223,7 +223,11 @@ final class Store {
         });
   }
 
-  void stamp(String reason, String detail, int amount, String operationId) throws Exception {
+  void stamp(String reason, String detail, int amount, String operationId) throws Exception { stamp(reason,detail,amount,operationId,day(now())); }
+
+  void stamp(String reason, String detail, int amount, String operationId, String effectiveDate) throws Exception {
+    LocalDate selected=LocalDate.parse(effectiveDate);
+    if(selected.isAfter(LocalDate.now(ZoneId.of("Asia/Seoul")))) throw new Exception("미래 날짜는 선택할 수 없습니다.");
     requireParent();
     int r = round();
     List<String> ids = new ArrayList<>();
@@ -250,6 +254,7 @@ final class Store {
                   r,
                   "date",
                   timestamp,
+                  "effectiveDate", effectiveDate,
                   "reason",
                   label,
                   "detail",
@@ -269,6 +274,7 @@ final class Store {
                     r,
                     "date",
                     Instant.parse(timestamp).plusMillis(1000L * (j + 1)).toString(),
+                    "effectiveDate", effectiveDate,
                     "reason",
                     "🔥 연속 칭찬 " + ((before / 5 + j + 1) * 5) + "회 보너스!",
                     "detail",
