@@ -364,6 +364,18 @@ public class StoreTest {
     check(db.docs.get("logs/dated").optInt("round")==25,"dated stamp stays on active board");
     check(db.docs.get("logs/dated-bonus-0").optString("effectiveDate").equals("2026-10-01"),"bonus shares effective day");
     check(!db.docs.get("logs/dated").optString("date").startsWith("2026-10-01"),"actual creation date preserved");
+    db=new Fake();s=fixture(db);s.parent=true;
+    s.addReason(false,"새 칭찬",3);
+    JSONArray rs=Store.array(db.docs.get("meta/state"),"praiseReasons");
+    check(rs.optJSONObject(rs.length()-1).optInt("count")==3,"new reason retains default count");
+    int prior=rs.length();
+    try{s.addReason(false,"새 칭찬",3);throw new AssertionError();}catch(Exception expected){}
+    check(Store.array(db.docs.get("meta/state"),"praiseReasons").length()==prior,"duplicate does not overwrite list");
+    s.addReason(true,"새 차감",1);
+    check(Store.array(db.docs.get("meta/state"),"penaltyReasons").toString().contains("새 차감"),"penalty reason registration");
+    s.parent=false;
+    try{s.addReason(false,"child",1);throw new AssertionError();}catch(Exception expected){}
+    check(Store.array(db.docs.get("meta/state"),"praiseReasons").length()==prior,"child cannot register reasons");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

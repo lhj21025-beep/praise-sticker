@@ -514,6 +514,22 @@ final class Store {
         });
   }
 
+  void addReason(boolean penalty, String name, int count) throws Exception {
+    requireParent();
+    if (name.trim().isEmpty() || count < 1 || count > 100) throw new Exception("사유와 개수(1~100)를 확인해주세요.");
+    db.transaction(tx -> {
+      JSONObject fresh = tx.get("meta/state");
+      String key = penalty ? "penaltyReasons" : "praiseReasons";
+      JSONArray list = new JSONArray(array(fresh, key).toString());
+      for (int i = 0; i < list.length(); i++) {
+        String existing = penalty ? list.optString(i) : list.optJSONObject(i).optString("name");
+        if (existing.equals(name.trim())) throw new Exception("이미 등록된 사유입니다.");
+      }
+      list.put(penalty ? name.trim() : obj("name", name.trim(), "count", count));
+      tx.patch("meta/state", obj(key, list));
+    });
+  }
+
   void patch(String path, JSONObject changes) throws Exception {
     db.transaction(
         tx -> {
