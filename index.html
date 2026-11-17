@@ -350,7 +350,7 @@
   <div id="itemShopModal" class="modal" onclick="closeModalOnBg(event, 'itemShopModal')">
     <div class="modal-content overflow-hidden flex flex-col h-[85vh]">
       <div class="p-5 bg-pink-500 text-white font-black flex justify-between items-center shrink-0">
-        <h3>🎒 보관함</h3><button onclick="closeModal('itemShopModal')" class="text-xl">✕</button>
+        <h3>🎒 보관함 <span id="unusedGameTotal" class="text-sm"></span></h3><button onclick="closeModal('itemShopModal')" class="text-xl">✕</button>
       </div>
       <div class="flex bg-white shrink-0 border-b">
         <button id="mainTabReward" onclick="switchMainTab('보상')" class="flex-1 py-3 font-black text-indigo-600 border-b-2 border-indigo-500">🎁 보상함 <span id="mainTabRewardCount" class="text-xs font-black"></span></button>
@@ -795,7 +795,7 @@
 
       const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
       let items = [];
-      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0, usedByRole: it.usedByRole || '', useReason: it.useReason || '' }); });
+      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0, usedTimestamp: Date.parse(it.usedDate || '') || 0, usedByRole: it.usedByRole || '', useReason: it.useReason || '' }); });
 
       const pendingChildGameNotices = [];
       if (!isParent) itemsSnap.forEach(d => {
@@ -3413,6 +3413,9 @@
       const list = document.getElementById('itemList');
       const statusFilter = currentItemTab === 'unused' ? '사용 전' : '사용 후';
       const filtered = app.items.filter(i => i.status === statusFilter && i.type === currentBoxType);
+      if (statusFilter === '사용 후') filtered.sort((a,b) => (b.usedTimestamp || 0) - (a.usedTimestamp || 0));
+      const totalMinutes = app.items.filter(i => i.status === '사용 전' && ['보상','랜덤박스'].includes(i.type)).reduce((sum,i) => sum + parentGameMinutes(i), 0);
+      document.getElementById('unusedGameTotal').innerText = String(Math.floor(totalMinutes / 60)).padStart(2,'0') + '시간' + String(totalMinutes % 60).padStart(2,'0') + '분';
 
       // 🔢 사용 전/사용 후 탭 옆에 현재 보상함(또는 랜덤박스) 기준 개수 표시
       const unusedCount = app.items.filter(i => i.status === '사용 전' && i.type === currentBoxType).length;

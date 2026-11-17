@@ -35,3 +35,5 @@ Known verification limit: these feature implementations are compiled and key dat
 Parent game notices live on the used item (`usedByRole`, `parentUseNoticeStatus`, `parentUseNoticeText`, `parentUseNoticeConfirmedAt`) so older parents cannot accidentally dismiss child notices. Both clients use `parent-remainder-{sourceId}` and validate the fresh item's balance. Existing rollover dates and obtained dates are preserved. Child notices appear at login/reentry, remain pending until acknowledged, and do not modify rewards when acknowledged. They are in-app notices, not background push.
 
 1.3.0: Parent redemption supports non-game prizes (whole item) and optional useReason, visible in used history and child notices. Retry rewards exchange tickets; sticker rewards retain parent confirmation before stamps. Roulette tickets retain the child draw flow. Game partial use remains supported.
+
+1.3.1: Both used inventory tabs sort by actual usedDate descending (missing dates last). Inventory title shows combined unused game minutes across both boxes as HH시간MM분. Used items are excluded; partially used remainder items are included.
