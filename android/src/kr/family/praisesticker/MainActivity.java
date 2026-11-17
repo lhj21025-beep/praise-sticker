@@ -190,7 +190,7 @@ public class MainActivity extends Activity {
   GradientDrawable bg(int color, int stroke) {
     GradientDrawable d = new GradientDrawable();
     d.setColor(color);
-    d.setCornerRadius(dp(18));
+    d.setCornerRadius(dp(12));
     if (stroke != 0) d.setStroke(dp(1), stroke);
     return d;
   }
@@ -214,7 +214,7 @@ public class MainActivity extends Activity {
     t.setTextSize(size);
     t.setTextColor(color);
     if (bold) t.setTypeface(null, 1);
-    t.setPadding(dp(2), dp(6), dp(2), dp(6));
+    t.setPadding(dp(2), dp(3), dp(2), dp(3));
     return t;
   }
 
@@ -239,11 +239,16 @@ public class MainActivity extends Activity {
     b.setTextSize(13);
     b.setAllCaps(false);
     b.setTypeface(null, 1);
-    b.setTextColor(WHITE);
-    b.setMinHeight(dp(46));
-    b.setMinimumHeight(dp(46));
-    b.setPadding(dp(10), dp(8), dp(10), dp(8));
-    b.setBackground(bg(color, 0));
+    boolean primary = color == PURPLE || color == 0xff3b82f6;
+    boolean danger = color == 0xffef4444;
+    b.setTextColor(primary ? WHITE : danger ? 0xffb91c1c : INK);
+    b.setStateListAnimator(null);
+    b.setMinWidth(0);
+    b.setMinimumWidth(0);
+    b.setMinHeight(dp(48));
+    b.setMinimumHeight(dp(48));
+    b.setPadding(dp(10), dp(2), dp(10), dp(2));
+    b.setBackground(new RippleDrawable(android.content.res.ColorStateList.valueOf(0x226366f1), bg(primary ? PURPLE : danger ? 0xfffef2f2 : 0xfff1f5f9, primary ? 0 : danger ? 0xfffecaca : 0xffe2e8f0), null));
     b.setOnClickListener(
         v -> {
           vibrate();
@@ -255,7 +260,7 @@ public class MainActivity extends Activity {
   void btn(LinearLayout l, String label, int color, Runnable click) {
     Button b = button(label, color, click);
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-    lp.topMargin = dp(8);
+    lp.topMargin = dp(4);
     l.addView(b, lp);
   }
 
@@ -266,16 +271,16 @@ public class MainActivity extends Activity {
       if (i > 0) lp.leftMargin = dp(6);
       r.addView(button(labels[i], colors[i], clicks[i]), lp);
     }
-    gap(l, 8);
+    gap(l, 4);
     add(l, r);
   }
 
   LinearLayout card(LinearLayout l) {
     LinearLayout c = col();
-    c.setPadding(dp(16), dp(12), dp(16), dp(14));
+    c.setPadding(dp(14), dp(8), dp(14), dp(8));
     c.setBackground(bg(WHITE, 0xffe2e8f0));
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-    lp.topMargin = dp(12);
+    lp.topMargin = dp(8);
     l.addView(c, lp);
     return c;
   }
@@ -290,7 +295,7 @@ public class MainActivity extends Activity {
     e.setBackground(bg(0xfff1f5f9, 0xffe2e8f0));
     if (number) e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-    lp.topMargin = dp(8);
+    lp.topMargin = dp(4);
     l.addView(e, lp);
     return e;
   }
@@ -307,7 +312,7 @@ public class MainActivity extends Activity {
     ScrollView sc = new ScrollView(this);
     sc.setFillViewport(true);
     sc.addView(content);
-    content.setPadding(dp(20), dp(10), dp(20), dp(20));
+    content.setPadding(dp(18), dp(6), dp(18), dp(12));
     AlertDialog d =
         new AlertDialog.Builder(this)
             .setTitle(title)
@@ -356,7 +361,7 @@ public class MainActivity extends Activity {
     outer.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
     scroll.addView(outer);
     body = col();
-    body.setPadding(dp(18), dp(12), dp(18), dp(24));
+    body.setPadding(dp(16), dp(6), dp(16), dp(10));
     int max = Math.min(getResources().getDisplayMetrics().widthPixels, dp(560));
     outer.addView(body, new LinearLayout.LayoutParams(max, -2));
   }
@@ -416,7 +421,7 @@ public class MainActivity extends Activity {
     int oldY = scroll == null ? 0 : scroll.getScrollY();
     shell();
     LinearLayout header = col();
-    header.setPadding(dp(18), dp(13), dp(18), dp(15));
+    header.setPadding(dp(14), dp(8), dp(14), dp(8));
     header.setBackground(
         new GradientDrawable(
             GradientDrawable.Orientation.TL_BR, new int[] {0xff6366f1, 0xff4338ca}));
@@ -459,7 +464,7 @@ public class MainActivity extends Activity {
     else if (page.equals("wishes")) wishes();
     else home();
     LinearLayout nav = row();
-    nav.setPadding(dp(12), dp(8), dp(12), dp(8));
+    nav.setPadding(dp(12), dp(4), dp(12), dp(4));
     String[] labels = {"🏠 홈", "📜 기록", "⚙ 더보기"};
     Runnable[] actions = {
       () -> {
@@ -470,7 +475,7 @@ public class MainActivity extends Activity {
       this::more
     };
     for (int i = 0; i < 3; i++) {
-      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(45), 1);
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(48), 1);
       if (i > 0) lp.leftMargin = dp(8);
       nav.addView(button(labels[i], i == 0 ? PURPLE : INK, actions[i]), lp);
     }
@@ -545,9 +550,31 @@ public class MainActivity extends Activity {
   }
 
   Spinner spinner(LinearLayout l, List<String> choices) {
-    Spinner v = new Spinner(this);
-    v.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, choices));
-    l.addView(v, new LinearLayout.LayoutParams(-1, dp(52)));
+    Spinner v = new Spinner(this, Spinner.MODE_DROPDOWN);
+    ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, choices) {
+      @Override public View getView(int position, View convertView, ViewGroup parent) {
+        TextView t = (TextView) super.getView(position, convertView, parent);
+        t.setTextSize(16); t.setTextColor(INK);
+        t.setPadding(dp(12), dp(8), dp(32), dp(8));
+        return t;
+      }
+      @Override public View getDropDownView(int position, View convertView, ViewGroup parent) {
+        TextView t = (TextView) super.getDropDownView(position, convertView, parent);
+        t.setTextSize(16); t.setTextColor(INK); t.setMinHeight(dp(48));
+        t.setGravity(Gravity.CENTER_VERTICAL); t.setPadding(dp(14), dp(8), dp(14), dp(8));
+        return t;
+      }
+    };
+    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+    v.setAdapter(adapter);
+    v.setBackground(bg(WHITE, 0xff94a3b8));
+    FrameLayout frame = new FrameLayout(this);
+    frame.addView(v, new FrameLayout.LayoutParams(-1, -1));
+    TextView arrow = text("▾", 18, MUTED, true);
+    arrow.setGravity(Gravity.CENTER); arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    frame.addView(arrow, new FrameLayout.LayoutParams(dp(32), -1, Gravity.RIGHT));
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(52)); lp.topMargin = dp(4);
+    l.addView(frame, lp);
     return v;
   }
 
@@ -575,14 +602,21 @@ public class MainActivity extends Activity {
   void stampForm(boolean penalty) {
     List<String> names = reasonNames(penalty);
     if (names.isEmpty()) {
-      toast("판 관리에서 사유를 먼저 추가해주세요.");
+      newReasonForm(penalty, () -> stampForm(penalty));
       return;
     }
     LinearLayout c = col();
     final String[] effectiveDate={Store.day(Store.now())};
     Button dateButton=button("📅 스티커 날짜: "+effectiveDate[0],PURPLE,()->{});add(c,dateButton);
     dateButton.setOnClickListener(v->pickStickerDate(effectiveDate[0], day->{effectiveDate[0]=day;dateButton.setText("📅 스티커 날짜: "+day);}));
+    add(c, text(penalty ? "차감 사유" : "칭찬 내용", 13, MUTED, true));
     Spinner reason = spinner(c, names);
+    btn(c, "+ 신규 사유 등록", MUTED, () -> newReasonForm(penalty, () -> {
+      List<String> updated = reasonNames(penalty);
+      ArrayAdapter<String> adapter = (ArrayAdapter<String>) reason.getAdapter();
+      adapter.clear(); adapter.addAll(updated); adapter.notifyDataSetChanged();
+      reason.setSelection(updated.size() - 1);
+    }));
     EditText detail = input(c, "상세 설명 (선택)", "", false);
     EditText count = input(c, "도장 개수", "1", true);
     if (!penalty)
@@ -612,6 +646,25 @@ public class MainActivity extends Activity {
             error(e);
           }
         });
+  }
+
+  void newReasonForm(boolean penalty, Runnable saved) {
+    LinearLayout c = col();
+    add(c, text("사유 이름", 13, MUTED, true));
+    EditText name = input(c, "예: 스스로 숙제하기", "", false);
+    if (!penalty) add(c, text("기본 스티커 개수", 13, MUTED, true));
+    EditText count = penalty ? null : input(c, "1~100개", "1", true);
+    AlertDialog d = dialog(penalty ? "신규 차감 사유" : "신규 칭찬 사유", c);
+    btn(c, "등록", PURPLE, () -> {
+      try {
+        String value = name.getText().toString().trim();
+        int n = penalty ? 1 : num(count);
+        if (value.isEmpty() || n < 1 || n > 100) throw new Exception("사유와 개수(1~100)를 확인해주세요.");
+        run("사유 등록 중…", () -> { s.addReason(penalty, value, n); s.load(); }, () -> {
+          d.dismiss(); saved.run(); toast("새 사유를 등록했어요.");
+        });
+      } catch (Exception e) { error(e); }
+    });
   }
 
   static long usedMillis(JSONObject item) {
@@ -1035,9 +1088,7 @@ public class MainActivity extends Activity {
       return;
     }
     LinearLayout c = col();
-    final String[] effectiveDate={Store.day(Store.now())};
-    Button dateButton=button("📅 스티커 날짜: "+effectiveDate[0],PURPLE,()->{});add(c,dateButton);
-    dateButton.setOnClickListener(v->pickStickerDate(effectiveDate[0], day->{effectiveDate[0]=day;dateButton.setText("📅 스티커 날짜: "+day);}));
+    add(c, text("칭찬 내용", 13, MUTED, true));
     Spinner reason = spinner(c, names);
     EditText detail = input(c, "어떤 일을 했나요?", "", false);
     AlertDialog d = dialog("🙋 칭찬 도장 요청", c);
@@ -1578,7 +1629,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.4.0\n"
+            "칭찬 스티커 1.4.1\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",
