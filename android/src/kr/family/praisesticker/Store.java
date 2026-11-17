@@ -15,7 +15,8 @@ final class Store {
       items = new ArrayList<>(),
       wishes = new ArrayList<>(),
       requests = new ArrayList<>(),
-      notifications = new ArrayList<>();
+      notifications = new ArrayList<>(),
+      childGameNotices = new ArrayList<>();
   boolean parent;
   int selectedRound = 0, score, streak;
   String best = "아직 없음";
@@ -117,6 +118,9 @@ final class Store {
     wishes = w;
     requests = r;
     notifications = n;
+    childGameNotices = new ArrayList<>();
+    if (!parent) for (JSONObject x : i)
+      if (x.optString("usedByRole").equals("parent") && x.optString("parentUseNoticeStatus").equals("대기 중")) childGameNotices.add(x);
     score = sum(l);
     streak = streak(l);
     Map<String, Integer> counts = new LinkedHashMap<>();
@@ -344,6 +348,57 @@ final class Store {
       for(int k=0;k<boxes.length();k++){JSONObject box=boxes.getJSONObject(k);int step=box.optInt("step");if(step>0&&before<step&&before+count>=step){JSONObject ticket=item(round,"룰렛 추첨권","랜덤박스");put(ticket,"prizesSnapshot",box.optString("text"));tx.set("items/sticker-reward-"+itemId+"-lucky-"+step,ticket);}}
     });
     if(granted[0]>0)complete(granted[0]);
+  }
+
+
+  static int parentGameMinutes(JSONObject item) {
+    if (item == null) return 0;
+    java.util.regex.Matcher m = java.util.regex.Pattern.compile("게임\\s*([1-9]\\d*)\\s*분").matcher(item.optString("name"));
+    if (!m.find()) return 0;
+    try { return Integer.parseInt(m.group(1)); } catch (NumberFormatException e) { return 0; }
+  }
+
+  static String gameName(String name, int minutes) {
+    return name.replaceFirst("(게임\\s*)[1-9]\\d*(\\s*분)", "$1" + minutes + "$2");
+  }
+
+  void parentUseGame(String id, int minutes) throws Exception {
+    requireParent();
+    if (minutes < 1) throw new Exception("사용할 시간을 정수로 입력해주세요.");
+    String path = "items/" + id;
+    db.transaction(tx -> {
+      JSONObject it = tx.get(path);
+      if (it == null) throw new Exception("보상을 찾지 못했습니다.");
+      if (!it.optString("status").equals("사용 전")) throw new Exception("이미 사용 처리된 보상입니다. 새로고침해주세요.");
+      int max = parentGameMinutes(it);
+      if (max == 0 || minutes > max) throw new Exception("보관함의 남은 게임 시간을 확인해주세요.");
+      if (minutes < max) {
+        JSONObject remaining = new JSONObject(it.toString());
+        for (String key : new String[]{"__id", "__path", "usedByRole", "parentUseNoticeStatus", "parentUseNoticeText", "parentUseNoticeConfirmedAt"}) remaining.remove(key);
+        put(remaining, "name", gameName(it.optString("name"), max - minutes));
+        put(remaining, "status", "사용 전");
+        put(remaining, "usedDate", "");
+        put(remaining, "gameMinutes", max - minutes);
+        tx.set("items/parent-remainder-" + id, remaining);
+      }
+      tx.patch(path, obj(
+          "name", gameName(it.optString("name"), minutes),
+          "status", "사용 후", "usedDate", now(), "gameMinutes", minutes,
+          "usedByRole", "parent", "parentUseNoticeStatus", "대기 중",
+          "parentUseNoticeText", "부모님이 게임 " + minutes + "분을 사용 처리했어요. 이 보상의 남은 시간은 " + (max - minutes) + "분이에요."));
+    });
+  }
+
+  void dismissChildGameNotices(List<String> itemIds) throws Exception {
+    if (parent) throw new Exception("자녀 화면에서만 확인할 수 있습니다.");
+    for (String id : new LinkedHashSet<>(itemIds)) {
+      String path = "items/" + id;
+      db.transaction(tx -> {
+        JSONObject it = tx.get(path);
+        if (it != null && it.optString("usedByRole").equals("parent") && it.optString("parentUseNoticeStatus").equals("대기 중"))
+          tx.patch(path, obj("parentUseNoticeStatus", "확인함", "parentUseNoticeConfirmedAt", now()));
+      });
+    }
   }
 
   void use(String id, int amount, int max) throws Exception {

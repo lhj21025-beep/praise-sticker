@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
   ProgressBar progress;
   long lastSync = 0;
   boolean logged = false;
+  final Set<String> shownChildNotices = new HashSet<>();
   final Runnable poll =
       new Runnable() {
         public void run() {
@@ -76,9 +77,10 @@ public class MainActivity extends Activity {
   protected void onResume() {
     super.onResume();
     active = true;
+    shownChildNotices.clear();
     main.removeCallbacks(poll);
     main.postDelayed(poll, 60000);
-    if (logged && !busy && System.currentTimeMillis() - lastSync > 15000) refresh(false);
+    if (logged && !busy) refresh(false);
   }
 
   @Override
@@ -180,6 +182,7 @@ public class MainActivity extends Activity {
         () -> {
           lastSync = System.currentTimeMillis();
           render();
+          maybeShowChildGameNotices();
           if (manual) toast("최신 내용을 불러왔어요.");
         });
   }
@@ -403,6 +406,8 @@ public class MainActivity extends Activity {
           page = "home";
           render();
           if (parent && !s.notifications.isEmpty()) showNotifications();
+          shownChildNotices.clear();
+          maybeShowChildGameNotices();
         });
   }
 
@@ -494,6 +499,8 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams vp = new LinearLayout.LayoutParams(-1, dp(420));
     vp.topMargin = dp(12);
     body.addView(boardView, vp);
+    if (!s.parent && !s.childGameNotices.isEmpty())
+      btn(body, "🔔 부모님 사용 알림 " + s.childGameNotices.size() + "건", PURPLE, this::showChildGameNotices);
     if (s.parent) {
       if (!s.requests.isEmpty())
         btn(body, "🙋 칭찬 요청 " + s.requests.size() + "건", GREEN, this::requests);
@@ -646,12 +653,57 @@ public class MainActivity extends Activity {
       if (!i.optString("gameSettlementDate").isEmpty())
         add(c, text("이월 원본: " + i.optString("gameSettlementDate"), 12, 0xff0284c7, false));
       if (itemStatus.equals("사용 후"))
-        add(c, text("사용: " + Store.date(i.optString("usedDate")), 12, PINK, false));
+        add(c, text("사용: " + Store.date(i.optString("usedDate")) + (i.optString("usedByRole").equals("parent") ? " · 부모가 사용 처리" : ""), 12, PINK, false));
+      else if (s.parent && Store.parentGameMinutes(i) > 0)
+        btn(c, "부모가 게임시간 사용 처리", PURPLE, () -> parentUseGameForm(i));
       else if (s.parent) add(c, text("자녀 화면에서 사용할 수 있습니다.", 12, MUTED, false));
       else
         btn(c, i.optString("name").equals("룰렛 추첨권") ? "추첨하기 🎯" : "사용하기", PINK, () -> useItem(i));
     }
     if (shown == 0) center(body, "목록이 비어있어요.", 15, MUTED);
+  }
+
+
+  void parentUseGameForm(JSONObject item) {
+    int max = Store.parentGameMinutes(item);
+    if (!s.parent || max < 1) return;
+    LinearLayout c = col();
+    add(c, text("사용한 게임 시간을 입력하세요. 남은 시간은 보관함에 유지되고 아들에게 알림이 전달됩니다.", 14, MUTED, false));
+    EditText amount = input(c, "사용 시간 (1~" + max + "분)", String.valueOf(max), true);
+    AlertDialog d = dialog(item.optString("name"), c);
+    btn(c, "부모가 사용 처리", PURPLE, () -> {
+      try {
+        int minutes = Integer.parseInt(amount.getText().toString().trim());
+        if (minutes < 1 || minutes > max) throw new Exception("1~" + max + " 사이의 정수를 입력해주세요.");
+        confirm("게임 " + minutes + "분을 사용 처리하고 " + (max - minutes) + "분을 남길까요?\n아들이 접속하면 알림이 표시됩니다.", () -> {
+          d.dismiss();
+          change("게임시간 사용 처리", () -> s.parentUseGame(item.optString("__id"), minutes));
+        });
+      } catch (Exception e) { error(e); }
+    });
+  }
+
+  void maybeShowChildGameNotices() {
+    if (!logged || s.parent || dialogs > 0 || s.childGameNotices.isEmpty()) return;
+    for (JSONObject n : s.childGameNotices)
+      if (!shownChildNotices.contains(n.optString("__id"))) { showChildGameNotices(); return; }
+  }
+
+  void showChildGameNotices() {
+    LinearLayout c = col();
+    List<String> ids = new ArrayList<>();
+    for (JSONObject n : new ArrayList<>(s.childGameNotices)) {
+      String id = n.optString("__id");
+      ids.add(id); shownChildNotices.add(id);
+      LinearLayout cell = card(c);
+      add(cell, text(n.optString("parentUseNoticeText", "부모님이 " + n.optString("name") + "을 사용 처리했어요."), 16, INK, true));
+      add(cell, text(Store.date(n.optString("usedDate")), 12, MUTED, false));
+    }
+    AlertDialog d = dialog("🔔 부모님 사용 알림", c);
+    btn(c, "확인했어요", PURPLE, () -> {
+      d.dismiss();
+      change("알림 확인", () -> s.dismissChildGameNotices(ids));
+    });
   }
 
   void useItem(JSONObject i) {
@@ -1483,7 +1535,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.1.0\n"
+            "칭찬 스티커 1.2.0\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",

@@ -20,6 +20,7 @@ Baseline: web commit d3cf54617442a558bc94944efccdb8cc2683fc76.
 | Child praise requests, approval/dismissal | requestForm/requests, Store.stamp/patch | Implemented |
 | Wish creation, approval, postponement, pending delete | wishes/wishReply | Implemented |
 | Random-box sticker reward approval | Store.acknowledgeNotification / web confirmNotification | Parent grants exact count once to active board; shared source marker and log ID |
+| Parent game-time redemption + child notice | parentUseGame / parentUseGameForm; item-backed child notices | Implemented; partial/full use, atomic notice, child acknowledgement. Pending release validation/signing. |
 | In-app parent notifications | showNotifications | Implemented; not background push |
 | Statistics: positive/negative counts, top 5, weekdays | report | Implemented with native bars |
 | Completion durations and historical backfill | history, Store.backfill | Implemented |
@@ -30,3 +31,5 @@ Baseline: web commit d3cf54617442a558bc94944efccdb8cc2683fc76.
 Future change policy: check BOTH clients, preserve shared field meanings, add regression coverage for affected behavior, update this table, and build/sign a new APK as well as deploying web changes. Never claim one deployment updates the other client's executable.
 
 Known verification limit: these feature implementations are compiled and key data paths fixture-tested; the complete UI has not been exercised on an Android device in this environment.
+
+Parent game notices live on the used item (`usedByRole`, `parentUseNoticeStatus`, `parentUseNoticeText`, `parentUseNoticeConfirmedAt`) so older parents cannot accidentally dismiss child notices. Both clients use `parent-remainder-{sourceId}` and validate the fresh item's balance. Existing rollover dates and obtained dates are preserved. Child notices appear at login/reentry, remain pending until acknowledged, and do not modify rewards when acknowledged. They are in-app notices, not background push.

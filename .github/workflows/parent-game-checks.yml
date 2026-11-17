@@ -1,0 +1,37 @@
+name: Web and native regression checks
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'tests/**'
+      - 'android/**'
+      - '.github/workflows/parent-game-checks.yml'
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Web regressions
+        run: |
+          node tests/sticker-approval.test.cjs
+          node tests/parent-game-use.test.cjs
+      - name: Prepare Android test dependencies
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+          mkdir -p "$RUNNER_TEMP/praise-tools"
+          ln -s "$ANDROID_HOME/platforms/android-35" "$RUNNER_TEMP/praise-tools/android-35"
+          ln -s "$ANDROID_HOME/build-tools/35.0.0" "$RUNNER_TEMP/praise-tools/android-15"
+          curl --fail --location --retry 3 https://repo.maven.apache.org/maven2/org/eclipse/jdt/ecj/3.37.0/ecj-3.37.0.jar -o "$RUNNER_TEMP/praise-tools/ecj.jar"
+          curl --fail --location --retry 3 https://repo.maven.apache.org/maven2/org/json/json/20240303/json-20240303.jar -o "$RUNNER_TEMP/praise-tools/json.jar"
+      - name: Compile native and run isolated data tests
+        run: ANDROID_TOOL_DIR="$RUNNER_TEMP/praise-tools" bash android/test.sh
