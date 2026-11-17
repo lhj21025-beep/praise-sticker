@@ -307,6 +307,48 @@ public class StoreTest {
     try { s.acknowledgeNotification("use-wait"); throw new AssertionError(); } catch(Exception expected){}
     check(db.docs.get("notifications/use-wait").optString("status").equals("대기 중"),"no active board preserves pending reward");
     check(Store.stickerRewardCount(Store.item(25,"게임 3분","랜덤박스"))==0,"other numeric rewards excluded");
+
+    db = new Fake(); s = fixture(db);
+    JSONObject parentGame = Store.item(25, "게임 60분 (이월)", "보상");
+    put(parentGame,"gameRollover",true);put(parentGame,"gameSettlementDate","2026-11-15");put(parentGame,"gameMinutes",60);
+    db.seed("items/parent-game",parentGame);
+    try { s.parentUseGame("parent-game",20); throw new AssertionError("child used parent action"); } catch(Exception expected){}
+    s.parent=true;
+    for(int amount:new int[]{0,-1,61}) {
+      try { s.parentUseGame("parent-game",amount); throw new AssertionError("invalid amount accepted"); } catch(Exception expected){}
+    }
+    db.failCommit=true;
+    try { s.parentUseGame("parent-game",20); throw new AssertionError(); } catch(java.io.IOException expected){}
+    check(db.docs.get("items/parent-game").optString("status").equals("사용 전"),"failed parent redemption keeps balance");
+    check(!db.docs.containsKey("items/parent-remainder-parent-game"),"failed parent redemption creates no remainder");
+    db.failCommit=false;db.abortOnce=true;
+    s.parentUseGame("parent-game",20);
+    check(db.docs.get("items/parent-game").optString("name").equals("게임 20분 (이월)"),"parent records exact used minutes");
+    check(db.docs.get("items/parent-game").optString("parentUseNoticeStatus").equals("대기 중"),"parent use creates child notice atomically");
+    JSONObject parentRemaining=db.docs.get("items/parent-remainder-parent-game");
+    check(parentRemaining.optInt("gameMinutes")==40,"parent split preserves forty minutes");
+    check(parentRemaining.optString("gameSettlementDate").equals("2026-11-15"),"parent split preserves settlement date");
+    check(!parentRemaining.has("parentUseNoticeStatus"),"remaining item does not duplicate notice");
+    try { s.parentUseGame("parent-game",20); throw new AssertionError("double use accepted"); } catch(Exception expected){}
+    check(db.docs.get("items/parent-remainder-parent-game").optInt("gameMinutes")==40,"duplicate parent use does not subtract again");
+    try { s.dismissChildGameNotices(Arrays.asList("parent-game")); throw new AssertionError(); } catch(Exception expected){}
+    s.parent=false;s.load();
+    check(s.childGameNotices.size()==1,"child loads pending parent use");
+    db.failCommit=true;
+    try { s.dismissChildGameNotices(Arrays.asList("parent-game")); throw new AssertionError(); } catch(java.io.IOException expected){}
+    db.failCommit=false;
+    check(db.docs.get("items/parent-game").optString("parentUseNoticeStatus").equals("대기 중"),"failed notice acknowledgement remains pending");
+    JSONObject later=new JSONObject(db.docs.get("items/parent-game").toString());db.seed("items/later-parent-use",later);
+    s.dismissChildGameNotices(Arrays.asList("parent-game","parent-game"));s.load();
+    check(s.childGameNotices.size()==1,"child acknowledgement only dismisses visible IDs");
+    s.parent=true;s.parentUseGame("parent-remainder-parent-game",40);
+    check(!db.docs.containsKey("items/parent-remainder-parent-remainder-parent-game"),"full use makes no empty remainder");
+    db.seed("items/not-game",Store.item(25,"칭찬스티커 3장","랜덤박스"));
+    try { s.parentUseGame("not-game",1); throw new AssertionError(); } catch(Exception expected){}
+    check(db.docs.get("items/not-game").optString("status").equals("사용 전"),"parent action excludes non-game reward");
+    db.seed("items/child-used",obj("name","게임 30분","status","사용 후"));
+    try { s.parentUseGame("child-used",10); throw new AssertionError(); } catch(Exception expected){}
+    check(!db.docs.get("items/child-used").has("parentUseNoticeStatus"),"child-first race cannot charge twice");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

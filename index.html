@@ -795,7 +795,15 @@
 
       const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
       let items = [];
-      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0 }); });
+      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0, usedByRole: it.usedByRole || '' }); });
+
+      const pendingChildGameNotices = [];
+      if (!isParent) itemsSnap.forEach(d => {
+        const it = d.data();
+        if (it.usedByRole === 'parent' && it.parentUseNoticeStatus === '대기 중') {
+          pendingChildGameNotices.push({ id: d.id, text: it.parentUseNoticeText || ('부모님이 ' + it.name + '을 사용 처리했어요.'), childName: '부모님', date: fmtFull(it.usedDate), stickerCount: 0 });
+        }
+      });
 
       const wishesSnap = await db.collection('wishes').orderBy('date','desc').get();
       let wishes = [];
@@ -824,7 +832,7 @@
         userName, isParent, currentTitle: titleForScore(state.lifetimeScore || 0), lifetimeScore: state.lifetimeScore || 0,
         boards: [...boards].reverse(), currentBoard, currentScore, logs, praiseList, penaltyList: state.penaltyReasons || [],
         praiseCounts, bestPraise, currentStreak, hallOfFame: hallOfFame.reverse(), items, wishes,
-        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications
+        dailyBuff: state.dailyBuff || '', role, stats: null, pendingRequests, pendingNotifications, pendingChildGameNotices
       };
     }
 
@@ -1061,6 +1069,62 @@
       });
       if (matches.length !== 1) throw new Error('이 알림의 원본 보상을 하나로 확인할 수 없어 지급하지 않았습니다. 사용 내역을 확인해주세요.');
       return matches[0].id;
+    }
+
+
+    // Parent game redemption and its child notice share one atomic item update.
+    function parentGameMinutes(item) {
+      const m = String(item && item.name || '').match(/게임\s*([1-9]\d*)\s*분/);
+      return m && Number.isSafeInteger(Number(m[1])) ? Number(m[1]) : 0;
+    }
+
+    async function parentUseGame(itemId, minutes, role) {
+      if (role !== 'parent') throw new Error('부모 화면에서만 사용할 수 있습니다.');
+      if (!Number.isSafeInteger(minutes) || minutes < 1) throw new Error('사용할 시간을 정수로 입력해주세요.');
+      await ensureAuth();
+      const ref = db.collection('items').doc(itemId);
+      const remainingRef = db.collection('items').doc('parent-remainder-' + itemId);
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new Error('보상을 찾지 못했습니다.');
+        const item = snap.data();
+        if (item.status !== '사용 전') throw new Error('이미 사용 처리된 보상입니다. 새로고침해주세요.');
+        const max = parentGameMinutes(item);
+        if (!max || minutes > max) throw new Error('보관함의 남은 게임 시간을 확인해주세요.');
+        const now = new Date().toISOString();
+        const nameWithMinutes = n => item.name.replace(/(게임\s*)[1-9]\d*(\s*분)/, (_, a, b) => a + n + b);
+        if (minutes < max) {
+          const remaining = { ...item, name: nameWithMinutes(max - minutes), status: '사용 전', usedDate: '', gameMinutes: max - minutes };
+          delete remaining.usedByRole;
+          delete remaining.parentUseNoticeStatus;
+          delete remaining.parentUseNoticeText;
+          delete remaining.parentUseNoticeConfirmedAt;
+          tx.set(remainingRef, remaining);
+        }
+        tx.update(ref, {
+          name: nameWithMinutes(minutes), status: '사용 후', usedDate: now,
+          gameMinutes: minutes, usedByRole: 'parent',
+          parentUseNoticeStatus: '대기 중',
+          parentUseNoticeText: '부모님이 게임 ' + minutes + '분을 사용 처리했어요. 이 보상의 남은 시간은 ' + (max - minutes) + '분이에요.'
+        });
+      });
+      return getAppData(null, role);
+    }
+
+    async function dismissChildGameNotices(role, itemIds) {
+      if (role !== 'child') throw new Error('자녀 화면에서만 확인할 수 있습니다.');
+      if (!Array.isArray(itemIds)) throw new Error('알림을 다시 열어주세요.');
+      await ensureAuth();
+      for (const id of [...new Set(itemIds)]) {
+        const ref = db.collection('items').doc(id);
+        await db.runTransaction(async tx => {
+          const snap = await tx.get(ref);
+          if (snap.exists && snap.data().usedByRole === 'parent' && snap.data().parentUseNoticeStatus === '대기 중') {
+            tx.update(ref, { parentUseNoticeStatus: '확인함', parentUseNoticeConfirmedAt: new Date().toISOString() });
+          }
+        });
+      }
+      return getAppData(null, role);
     }
 
     async function useItemSplit(itemId, childName, useAmount, maxAmount) {
@@ -1567,7 +1631,7 @@
 
     const __firestoreApi = {
       authenticate, changeAppPassword, getAppData, addStampRecord, recoverLastPenalty,
-      addWish, handleWishStatus, setDailyBuff, useItemSplit, saveRouletteResult,
+      addWish, handleWishStatus, setDailyBuff, useItemSplit, parentUseGame, dismissChildGameNotices, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
       getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, confirmNotification, updateLogEntry, saveGameRollover
@@ -1879,11 +1943,30 @@
         // 🔔 부모가 접속했을 때, 그 사이 아이가 룰렛을 돌리거나 아이템을 썼다면 팝업으로 바로 알려줍니다.
         if (app.isParent && app.pendingNotifications && app.pendingNotifications.length > 0) {
           openNotifyPopup(app.pendingNotifications);
+        } else if (!app.isParent && app.pendingChildGameNotices && app.pendingChildGameNotices.length) {
+          openNotifyPopup(app.pendingChildGameNotices);
         }
       } catch (e) {
         showLoadErrorScreen('화면을 그리는 중 오류가 발생했어요: ' + e.message);
       }
     }
+
+
+    // Reopening an already-running child web app also fetches pending notices.
+    let refreshingChildNotices = false;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible' || typeof app === 'undefined' || !app || app.isParent || refreshingChildNotices) return;
+      refreshingChildNotices = true;
+      google.script.run
+        .withSuccessHandler(res => {
+          refreshingChildNotices = false;
+          if (currentRole !== 'child') return;
+          app = res; renderBoard();
+          if (app.pendingChildGameNotices.length) openNotifyPopup(app.pendingChildGameNotices);
+        })
+        .withFailureHandler(() => { refreshingChildNotices = false; })
+        .getAppData(null, 'child');
+    });
 
     // 🔔 알림 팝업 열기 + 확인 처리
     let displayedNotificationIds = [];
@@ -1906,15 +1989,16 @@
       if (isDismissingNotifications) return;
       isDismissingNotifications = true;
       vibrate();
-      google.script.run
+      const runner = google.script.run
         .withSuccessHandler(res => {
           app = res;
           closeModal('notifyPopupModal');
           isDismissingNotifications = false;
           renderBoard();
         })
-        .withFailureHandler(err => { showToast("오류: " + err.message); isDismissingNotifications = false; })
-        .dismissAllNotifications(currentRole, displayedNotificationIds.slice());
+        .withFailureHandler(err => { showToast("오류: " + err.message); isDismissingNotifications = false; });
+      if (app.isParent) runner.dismissAllNotifications(currentRole, displayedNotificationIds.slice());
+      else runner.dismissChildGameNotices(currentRole, displayedNotificationIds.slice());
     }
 
     function confirmNotificationUI(id) {
@@ -3330,9 +3414,11 @@
           <div class="text-[11px] text-slate-500 space-y-1 font-bold">
             <p>획득: ${item.obtainedDate}</p>
             ${isGameRollover && item.gameSettlementDate ? `<p class="text-sky-600">이월 원본: ${item.gameSettlementDate}</p>` : ''}
-            ${item.status === '사용 후' ? `<p class="text-pink-500">사용: ${item.usedDate}</p>` : ''}
+            ${item.status === '사용 후' ? `<p class="text-pink-500">사용: ${item.usedDate}${item.usedByRole === 'parent' ? ' · 부모가 사용 처리' : ''}</p>` : ''}
           </div>
-          ${item.status === '사용 전' ? (app.isParent ? `
+          ${item.status === '사용 전' && app.isParent && parentGameMinutes(item) ? `
+            <button onclick="parentUseGameUI('${item.id}', this)" class="w-full mt-3 py-3 bg-indigo-500 text-white font-black rounded-xl">부모가 게임시간 사용 처리</button>
+          ` : item.status === '사용 전' ? (app.isParent ? `
             <p class="text-xs font-bold text-slate-400 mt-3 text-center bg-slate-100 py-2 rounded-lg">자녀 기기에서 사용할 수 있습니다</p>
           ` : `
             <button onclick="handleItemClick('${item.id}', '${item.name}', this)" class="w-full mt-3 py-3 bg-${currentBoxType === '보상' ? 'indigo' : 'pink'}-500 text-white font-black rounded-xl active:scale-95 transition shadow-md text-sm">
@@ -3341,6 +3427,23 @@
           `) : ''}
         </li>
       `}).join('');
+    }
+
+
+    function parentUseGameUI(id, btn) {
+      const item = (app.items || []).find(i => i.id === id);
+      const max = parentGameMinutes(item);
+      if (!app.isParent || !max) return;
+      const answer = prompt('[' + item.name + ']\n사용 처리할 시간을 분 단위로 입력하세요. (1~' + max + '분)\n아들에게 사용 알림이 전달됩니다.', String(max));
+      if (answer === null) return;
+      const minutes = Number(answer);
+      if (!Number.isSafeInteger(minutes) || minutes < 1 || minutes > max) { alert('1~' + max + ' 사이의 정수를 입력해주세요.'); return; }
+      if (!confirm('게임 ' + minutes + '분을 사용 처리하고 ' + (max - minutes) + '분을 남길까요?\n아들이 접속하면 알림이 표시됩니다.')) return;
+      btn.disabled = true; btn.innerText = '처리 중...';
+      google.script.run
+        .withSuccessHandler(res => { app = res; renderItems(); showToast('사용 처리 완료! 아들에게 알림을 남겼어요.'); })
+        .withFailureHandler(err => { showToast('오류: ' + err.message); btn.disabled = false; btn.innerText = '부모가 게임시간 사용 처리'; })
+        .parentUseGame(id, minutes, currentRole);
     }
 
     function handleItemClick(id, name, btn) {
