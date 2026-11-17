@@ -589,8 +589,16 @@ public class MainActivity extends Activity {
         });
   }
 
+  static long usedMillis(JSONObject item) {
+    try { return java.time.Instant.parse(item.optString("usedDate")).toEpochMilli(); }
+    catch (Exception e) { return 0; }
+  }
+
   void items() {
-    center(body, "🎒 아이템 보관함", 23, INK);
+    long totalMinutes = 0;
+    for (JSONObject item : s.items)
+      if (item.optString("status").equals("사용 전") && (item.optString("type", "랜덤박스").equals("보상") || item.optString("type", "랜덤박스").equals("랜덤박스"))) totalMinutes += Store.parentGameMinutes(item);
+    center(body, "🎒 보관함 " + String.format(java.util.Locale.KOREA, "%02d시간%02d분", totalMinutes / 60, totalMinutes % 60), 23, INK);
     buttons(
         body,
         new String[] {"🎁 보상", "🎰 랜덤박스"},
@@ -631,7 +639,9 @@ public class MainActivity extends Activity {
           }
         });
     int shown = 0;
-    for (JSONObject i : s.items) {
+    List<JSONObject> displayedItems = new ArrayList<>(s.items);
+    if (itemStatus.equals("사용 후")) displayedItems.sort((a,b) -> Long.compare(usedMillis(b), usedMillis(a)));
+    for (JSONObject i : displayedItems) {
       if (!i.optString("type", "랜덤박스").equals(boxType) || !i.optString("status").equals(itemStatus))
         continue;
       shown++;
@@ -1540,7 +1550,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.3.0\n"
+            "칭찬 스티커 1.3.1\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",
