@@ -349,6 +349,15 @@ public class StoreTest {
     db.seed("items/child-used",obj("name","게임 30분","status","사용 후"));
     try { s.parentUseGame("child-used",10); throw new AssertionError(); } catch(Exception expected){}
     check(!db.docs.get("items/child-used").has("parentUseNoticeStatus"),"child-first race cannot charge twice");
+    db=new Fake();s=fixture(db);s.parent=true;
+    db.seed("items/gift",Store.item(25,"아이스크림","랜덤박스"));
+    s.parentUseReward("gift","주말에 먹었어요");
+    check(db.docs.get("items/gift").optString("useReason").equals("주말에 먹었어요"),"reason retained");
+    check(db.docs.get("items/gift").optString("parentUseNoticeText").contains("주말에 먹었어요"),"reason in child notice");
+    try{s.parentUseReward("gift","again");throw new AssertionError();}catch(Exception expected){}
+    db.seed("items/retry-parent",Store.item(25,"룰렛 다시돌리기","랜덤박스"));
+    s.parentUseReward("retry-parent","");
+    check(db.docs.containsKey("items/retry_retry-parent"),"parent retry creates ticket");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

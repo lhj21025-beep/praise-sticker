@@ -795,7 +795,7 @@
 
       const itemsSnap = await db.collection('items').orderBy('obtainedDate','desc').get();
       let items = [];
-      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0, usedByRole: it.usedByRole || '' }); });
+      itemsSnap.forEach(d => { const it = d.data(); items.push({ id:d.id, round:it.round, name:it.name, obtainedDate:fmtFull(it.obtainedDate), status:it.status, usedDate: it.usedDate ? fmtFull(it.usedDate) : '', type: it.type || '랜덤박스', prizesSnapshot: it.prizesSnapshot, gameRollover: !!it.gameRollover, gameSettlementDate: it.gameSettlementDate || '', gameMinutes: Number(it.gameMinutes) || 0, usedByRole: it.usedByRole || '', useReason: it.useReason || '' }); });
 
       const pendingChildGameNotices = [];
       if (!isParent) itemsSnap.forEach(d => {
@@ -1078,7 +1078,7 @@
       return m && Number.isSafeInteger(Number(m[1])) ? Number(m[1]) : 0;
     }
 
-    async function parentUseGame(itemId, minutes, role) {
+    async function parentUseGame(itemId, minutes, role, reason = '') {
       if (role !== 'parent') throw new Error('부모 화면에서만 사용할 수 있습니다.');
       if (!Number.isSafeInteger(minutes) || minutes < 1) throw new Error('사용할 시간을 정수로 입력해주세요.');
       await ensureAuth();
@@ -1095,7 +1095,7 @@
         const nameWithMinutes = n => item.name.replace(/(게임\s*)[1-9]\d*(\s*분)/, (_, a, b) => a + n + b);
         if (minutes < max) {
           const remaining = { ...item, name: nameWithMinutes(max - minutes), status: '사용 전', usedDate: '', gameMinutes: max - minutes };
-          delete remaining.usedByRole;
+          delete remaining.usedByRole; delete remaining.useReason;
           delete remaining.parentUseNoticeStatus;
           delete remaining.parentUseNoticeText;
           delete remaining.parentUseNoticeConfirmedAt;
@@ -1103,10 +1103,37 @@
         }
         tx.update(ref, {
           name: nameWithMinutes(minutes), status: '사용 후', usedDate: now,
-          gameMinutes: minutes, usedByRole: 'parent',
+          gameMinutes: minutes, usedByRole: 'parent', useReason: String(reason).trim(),
           parentUseNoticeStatus: '대기 중',
-          parentUseNoticeText: '부모님이 게임 ' + minutes + '분을 사용 처리했어요. 이 보상의 남은 시간은 ' + (max - minutes) + '분이에요.'
+          parentUseNoticeText: '부모님이 게임 ' + minutes + '분을 사용 처리했어요. 이 보상의 남은 시간은 ' + (max - minutes) + '분이에요.' + (String(reason).trim() ? '\n사유: ' + String(reason).trim() : '')
         });
+      });
+      return getAppData(null, role);
+    }
+
+    async function parentUseReward(id, role, reason = '') {
+      if (role !== 'parent') throw new Error('부모 화면에서만 사용할 수 있습니다.');
+      await ensureAuth();
+      const ref = db.collection('items').doc(id);
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists || snap.data().status !== '사용 전') throw new Error('이미 사용되었거나 없는 보상입니다.');
+        const it = snap.data();
+        if (it.name === '룰렛 추첨권' || parentGameMinutes(it)) throw new Error('전용 사용 버튼을 이용해주세요.');
+        const retry = isRouletteRetry(it), count = stickerRewardCount(it);
+        const ticketRef = db.collection('items').doc('retry_' + id);
+        const prior = retry ? await tx.get(ticketRef) : null;
+        const now = new Date().toISOString();
+        const update = { status: '사용 후', usedDate: now, usedByRole: 'parent', useReason: String(reason).trim(), parentUseNoticeStatus: '대기 중', parentUseNoticeText: '부모님이 ' + it.name + '을 사용 처리했어요.' + (String(reason).trim() ? '\n사유: ' + String(reason).trim() : '') };
+        if (retry) {
+          if (!prior.exists) tx.set(ticketRef, { round: it.round, name: '룰렛 추첨권', obtainedDate: now, status: '사용 전', usedDate: '', type: '랜덤박스', prizesSnapshot: it.prizesSnapshot || '', sourceRetryItemId: id });
+          update.replacementTicketId = ticketRef.id;
+        }
+        if (count) {
+          update.stickerApprovalStatus = '대기 중'; update.stickerCount = count;
+          tx.set(db.collection('notifications').doc('use-' + id), { kind: 'item_use', text: '🎒 사용: ' + it.name, itemId: id, stickerCount: count, childName: '부모님', date: now, status: '대기 중' });
+        }
+        tx.update(ref, update);
       });
       return getAppData(null, role);
     }
@@ -1631,7 +1658,7 @@
 
     const __firestoreApi = {
       authenticate, changeAppPassword, getAppData, addStampRecord, recoverLastPenalty,
-      addWish, handleWishStatus, setDailyBuff, useItemSplit, parentUseGame, dismissChildGameNotices, saveRouletteResult,
+      addWish, handleWishStatus, setDailyBuff, useItemSplit, parentUseGame, parentUseReward, dismissChildGameNotices, saveRouletteResult,
       undoLastStamps, updateLuckyBox, updateBoardSettings, addNewReasonToData,
       updateReasonList, createNewBoard, updateThemeConfig, claimReward, sendStampRequest,
       getReportStats, dismissRequest, backfillRoundDurations, dismissAllNotifications, confirmNotification, updateLogEntry, saveGameRollover
@@ -3414,10 +3441,11 @@
           <div class="text-[11px] text-slate-500 space-y-1 font-bold">
             <p>획득: ${item.obtainedDate}</p>
             ${isGameRollover && item.gameSettlementDate ? `<p class="text-sky-600">이월 원본: ${item.gameSettlementDate}</p>` : ''}
+            ${item.status === '사용 후' && item.useReason ? `<p class="text-indigo-600 whitespace-pre-wrap">사용 사유: ${escapeHtml(item.useReason)}</p>` : ''}
             ${item.status === '사용 후' ? `<p class="text-pink-500">사용: ${item.usedDate}${item.usedByRole === 'parent' ? ' · 부모가 사용 처리' : ''}</p>` : ''}
           </div>
-          ${item.status === '사용 전' && app.isParent && parentGameMinutes(item) ? `
-            <button onclick="parentUseGameUI('${item.id}', this)" class="w-full mt-3 py-3 bg-indigo-500 text-white font-black rounded-xl">부모가 게임시간 사용 처리</button>
+          ${item.status === '사용 전' && app.isParent && item.name !== '룰렛 추첨권' ? `
+            <button onclick="parentUseGameUI('${item.id}', this)" class="w-full mt-3 py-3 bg-indigo-500 text-white font-black rounded-xl">부모가 사용 처리</button>
           ` : item.status === '사용 전' ? (app.isParent ? `
             <p class="text-xs font-bold text-slate-400 mt-3 text-center bg-slate-100 py-2 rounded-lg">자녀 기기에서 사용할 수 있습니다</p>
           ` : `
@@ -3433,7 +3461,16 @@
     function parentUseGameUI(id, btn) {
       const item = (app.items || []).find(i => i.id === id);
       const max = parentGameMinutes(item);
-      if (!app.isParent || !max) return;
+      if (!app.isParent || !item) return;
+      const reason = prompt('사용 처리 사유를 남겨주세요. (선택)', '');
+      if (reason === null) return;
+      if (!max) {
+        if (!confirm('[' + item.name + '] 보상을 사용 처리할까요?')) return;
+        btn.disabled = true;
+        google.script.run.withSuccessHandler(res => { app = res; renderItems(); showToast('사용 처리 완료'); })
+          .withFailureHandler(err => { btn.disabled = false; showToast(err.message); }).parentUseReward(id, currentRole, reason);
+        return;
+      }
       const answer = prompt('[' + item.name + ']\n사용 처리할 시간을 분 단위로 입력하세요. (1~' + max + '분)\n아들에게 사용 알림이 전달됩니다.', String(max));
       if (answer === null) return;
       const minutes = Number(answer);
@@ -3442,8 +3479,8 @@
       btn.disabled = true; btn.innerText = '처리 중...';
       google.script.run
         .withSuccessHandler(res => { app = res; renderItems(); showToast('사용 처리 완료! 아들에게 알림을 남겼어요.'); })
-        .withFailureHandler(err => { showToast('오류: ' + err.message); btn.disabled = false; btn.innerText = '부모가 게임시간 사용 처리'; })
-        .parentUseGame(id, minutes, currentRole);
+        .withFailureHandler(err => { showToast('오류: ' + err.message); btn.disabled = false; btn.innerText = '부모가 사용 처리'; })
+        .parentUseGame(id, minutes, currentRole, reason);
     }
 
     function handleItemClick(id, name, btn) {
