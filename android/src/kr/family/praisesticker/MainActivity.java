@@ -654,11 +654,12 @@ public class MainActivity extends Activity {
         add(c, text("이월 원본: " + i.optString("gameSettlementDate"), 12, 0xff0284c7, false));
       if (itemStatus.equals("사용 후"))
         add(c, text("사용: " + Store.date(i.optString("usedDate")) + (i.optString("usedByRole").equals("parent") ? " · 부모가 사용 처리" : ""), 12, PINK, false));
-      else if (s.parent && Store.parentGameMinutes(i) > 0)
-        btn(c, "부모가 게임시간 사용 처리", PURPLE, () -> parentUseGameForm(i));
+      else if (s.parent && !i.optString("name").equals("룰렛 추첨권"))
+        btn(c, "부모가 사용 처리", PURPLE, () -> parentUseGameForm(i));
       else if (s.parent) add(c, text("자녀 화면에서 사용할 수 있습니다.", 12, MUTED, false));
       else
         btn(c, i.optString("name").equals("룰렛 추첨권") ? "추첨하기 🎯" : "사용하기", PINK, () -> useItem(i));
+      if (itemStatus.equals("사용 후") && !i.optString("useReason").isEmpty()) add(c,text("사용 사유: "+i.optString("useReason"),14,INK,false));
     }
     if (shown == 0) center(body, "목록이 비어있어요.", 15, MUTED);
   }
@@ -666,18 +667,22 @@ public class MainActivity extends Activity {
 
   void parentUseGameForm(JSONObject item) {
     int max = Store.parentGameMinutes(item);
-    if (!s.parent || max < 1) return;
+    if (!s.parent) return;
     LinearLayout c = col();
     add(c, text("사용한 게임 시간을 입력하세요. 남은 시간은 보관함에 유지되고 아들에게 알림이 전달됩니다.", 14, MUTED, false));
+    EditText reason = input(c, "사용 사유 (선택)", "", false);
     EditText amount = input(c, "사용 시간 (1~" + max + "분)", String.valueOf(max), true);
+    if (max == 0) amount.setVisibility(View.GONE);
     AlertDialog d = dialog(item.optString("name"), c);
     btn(c, "부모가 사용 처리", PURPLE, () -> {
       try {
+        String why = reason.getText().toString().trim();
+        if(max==0){confirm(item.optString("name")+" 보상을 사용 처리할까요?",()->{d.dismiss();change("보상 사용 처리",()->s.parentUseReward(item.optString("__id"),why));});return;}
         int minutes = Integer.parseInt(amount.getText().toString().trim());
         if (minutes < 1 || minutes > max) throw new Exception("1~" + max + " 사이의 정수를 입력해주세요.");
         confirm("게임 " + minutes + "분을 사용 처리하고 " + (max - minutes) + "분을 남길까요?\n아들이 접속하면 알림이 표시됩니다.", () -> {
           d.dismiss();
-          change("게임시간 사용 처리", () -> s.parentUseGame(item.optString("__id"), minutes));
+          change("게임시간 사용 처리", () -> s.parentUseGame(item.optString("__id"), minutes, why));
         });
       } catch (Exception e) { error(e); }
     });
@@ -1535,7 +1540,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.2.0\n"
+            "칭찬 스티커 1.3.0\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",

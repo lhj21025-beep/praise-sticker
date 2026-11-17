@@ -362,7 +362,9 @@ final class Store {
     return name.replaceFirst("(게임\\s*)[1-9]\\d*(\\s*분)", "$1" + minutes + "$2");
   }
 
-  void parentUseGame(String id, int minutes) throws Exception {
+  void parentUseGame(String id, int minutes) throws Exception { parentUseGame(id, minutes, ""); }
+
+  void parentUseGame(String id, int minutes, String reason) throws Exception {
     requireParent();
     if (minutes < 1) throw new Exception("사용할 시간을 정수로 입력해주세요.");
     String path = "items/" + id;
@@ -374,7 +376,7 @@ final class Store {
       if (max == 0 || minutes > max) throw new Exception("보관함의 남은 게임 시간을 확인해주세요.");
       if (minutes < max) {
         JSONObject remaining = new JSONObject(it.toString());
-        for (String key : new String[]{"__id", "__path", "usedByRole", "parentUseNoticeStatus", "parentUseNoticeText", "parentUseNoticeConfirmedAt"}) remaining.remove(key);
+        for (String key : new String[]{"__id", "__path", "useReason", "usedByRole", "parentUseNoticeStatus", "parentUseNoticeText", "parentUseNoticeConfirmedAt"}) remaining.remove(key);
         put(remaining, "name", gameName(it.optString("name"), max - minutes));
         put(remaining, "status", "사용 전");
         put(remaining, "usedDate", "");
@@ -384,8 +386,29 @@ final class Store {
       tx.patch(path, obj(
           "name", gameName(it.optString("name"), minutes),
           "status", "사용 후", "usedDate", now(), "gameMinutes", minutes,
-          "usedByRole", "parent", "parentUseNoticeStatus", "대기 중",
-          "parentUseNoticeText", "부모님이 게임 " + minutes + "분을 사용 처리했어요. 이 보상의 남은 시간은 " + (max - minutes) + "분이에요."));
+          "usedByRole", "parent", "useReason", reason.trim(), "parentUseNoticeStatus", "대기 중",
+          "parentUseNoticeText", "부모님이 게임 " + minutes + "분을 사용 처리했어요. 이 보상의 남은 시간은 " + (max - minutes) + "분이에요." + (reason.trim().isEmpty() ? "" : "\n사유: " + reason.trim())));
+    });
+  }
+
+  void parentUseReward(String id, String reason) throws Exception {
+    requireParent();
+    db.transaction(tx -> {
+      JSONObject it = tx.get("items/" + id);
+      if (it == null || !it.optString("status").equals("사용 전")) throw new Exception("이미 사용되었거나 없는 보상입니다.");
+      if (it.optString("name").equals("룰렛 추첨권") || parentGameMinutes(it)>0) throw new Exception("전용 사용 버튼을 이용해주세요.");
+      JSONObject prior = retry(it) ? tx.get("items/retry_" + id) : null;
+      String date = now(); int count = stickerRewardCount(it);
+      JSONObject update = obj("status","사용 후","usedDate",date,"usedByRole","parent","useReason",reason.trim(),"parentUseNoticeStatus","대기 중","parentUseNoticeText","부모님이 " + it.optString("name") + "을 사용 처리했어요." + (reason.trim().isEmpty() ? "" : "\n사유: " + reason.trim()));
+      if (retry(it)) {
+        if(prior==null){JSONObject ticket=item(it.optInt("round"),"룰렛 추첨권","랜덤박스");put(ticket,"prizesSnapshot",it.optString("prizesSnapshot"));put(ticket,"sourceRetryItemId",id);tx.set("items/retry_"+id,ticket);}
+        put(update,"replacementTicketId","retry_"+id);
+      }
+      if(count>0){
+        put(update,"stickerApprovalStatus","대기 중");put(update,"stickerCount",count);
+        tx.set("notifications/use-"+id,obj("kind","item_use","text","🎒 사용: "+it.optString("name"),"itemId",id,"stickerCount",count,"childName","부모님","date",date,"status","대기 중"));
+      }
+      tx.patch("items/"+id,update);
     });
   }
 
