@@ -80,7 +80,8 @@ public class MainActivity extends Activity {
     shownChildNotices.clear();
     main.removeCallbacks(poll);
     main.postDelayed(poll, 60000);
-    if (logged && !busy) refresh(false);
+    routineShown = false;
+    if (logged && !busy && dialogs == 0) refresh(false);
   }
 
   @Override
@@ -183,6 +184,7 @@ public class MainActivity extends Activity {
           lastSync = System.currentTimeMillis();
           render();
           maybeShowChildGameNotices();
+          maybeShowRoutines();
           if (manual) toast("최신 내용을 불러왔어요.");
         });
   }
@@ -319,6 +321,7 @@ public class MainActivity extends Activity {
             .setView(sc)
             .setNegativeButton("닫기", null)
             .create();
+    d.setCanceledOnTouchOutside(false);
     d.setOnDismissListener(x -> dialogs--);
     dialogs++;
     d.show();
@@ -413,6 +416,7 @@ public class MainActivity extends Activity {
           if (parent && !s.notifications.isEmpty()) showNotifications();
           shownChildNotices.clear();
           maybeShowChildGameNotices();
+          maybeShowRoutines();
         });
   }
 
@@ -508,6 +512,7 @@ public class MainActivity extends Activity {
     if (!s.parent && !s.childGameNotices.isEmpty())
       btn(body, "🔔 부모님 사용 알림 " + s.childGameNotices.size() + "건", PURPLE, this::showChildGameNotices);
     if (s.parent) {
+      btn(body, "🕒 정기 칭찬 확인", PURPLE, () -> {routineShown=false; maybeShowRoutines();});
       if (!s.requests.isEmpty())
         btn(body, "🙋 칭찬 요청 " + s.requests.size() + "건", GREEN, this::requests);
       if (!s.notifications.isEmpty())
@@ -630,7 +635,7 @@ public class MainActivity extends Activity {
             }
           });
     AlertDialog d = dialog(penalty ? "차감하기" : "칭찬하기", c);
-    String op = id();
+    final String[] op = {id()};
     btn(
         c,
         penalty ? "차감 도장 찍기" : "칭찬 도장 쾅!",
@@ -640,12 +645,40 @@ public class MainActivity extends Activity {
             int n = num(count);
             if (n < 1 || n > 100) throw new Exception("1~100개 사이로 입력해주세요.");
             String r = reason.getSelectedItem().toString(), dt = detail.getText().toString();
-            d.dismiss();
-            change("도장", () -> s.stamp(r, dt, penalty ? -n : n, op, effectiveDate[0]));
+            String selectedDate = effectiveDate[0], operation = op[0];
+            run("도장 저장 중…", () -> { s.stamp(r, dt, penalty ? -n : n, operation, selectedDate); s.load(); }, () -> {
+              op[0] = id(); detail.setText(""); render(); toast("도장을 찍었어요. 계속 칭찬할 수 있어요.");
+            });
           } catch (Exception e) {
             error(e);
           }
         });
+  }
+
+  boolean routineShown = false;
+  void maybeShowRoutines() {
+    if(!s.parent || routineShown || dialogs>0 || busy) return;
+    routineShown=true;
+    run("정기 칭찬 확인 중…", () -> s.loadRoutines(), () -> {
+      if(!s.routinePending.isEmpty()) routineDialog();
+    });
+  }
+  void routineDialog() {
+    LinearLayout c=col();
+    add(c,text("이미 직접 찍은 항목은 ‘오늘은 안 함’을 선택해주세요. 닫으면 미처리 항목은 다음 실행 때 다시 표시됩니다.",13,MUTED,false));
+    AlertDialog d=dialog("🕒 정기 칭찬 확인",c);
+    for(JSONObject check:new ArrayList<>(s.routinePending)) {
+      String day=check.optString("day"); int slot=check.optInt("slot");
+      LinearLayout row=card(c);
+      add(row,text(day+" · "+Store.ROUTINE_HOURS[slot]+":00",12,MUTED,true));
+      add(row,text(Store.ROUTINE_NAMES[slot]+" · "+Store.routineCount(s.state,slot)+"개",16,INK,true));
+      Runnable[] actions=new Runnable[3];
+      for(int i=0;i<2;i++) { final boolean approve=i==0;
+        actions[i]=()->run("확인 저장 중…",()->{s.decideRoutine(day,slot,approve);s.load();},()->{row.removeAllViews();add(row,text(day+" · "+Store.ROUTINE_NAMES[slot]+(approve?" — 승인 처리됨":" — 오늘은 안 함"),14,MUTED,true));render();});
+      }
+      actions[2]=()->{row.removeAllViews();add(row,text(day+" · "+Store.ROUTINE_NAMES[slot]+" — 나중에 확인",14,MUTED,false));};
+      buttons(row,new String[]{"승인","오늘은 안 함","나중에"},new int[]{PURPLE,MUTED,MUTED},actions);
+    }
   }
 
   void newReasonForm(boolean penalty, Runnable saved) {
@@ -1629,7 +1662,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.4.1\n"
+            "칭찬 스티커 1.5.0\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",

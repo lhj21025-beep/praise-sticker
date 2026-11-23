@@ -376,6 +376,32 @@ public class StoreTest {
     s.parent=false;
     try{s.addReason(false,"child",1);throw new AssertionError();}catch(Exception expected){}
     check(Store.array(db.docs.get("meta/state"),"praiseReasons").length()==prior,"child cannot register reasons");
+    check(Store.dueRoutines("2026-11-23",java.time.ZonedDateTime.parse("2026-11-23T06:59:00+09:00"),new HashSet<>()).size()==0,"no prompt before due hour");
+    check(Store.dueRoutines("2026-11-23",java.time.ZonedDateTime.parse("2026-11-23T23:00:00+09:00"),new HashSet<>()).size()==6,"six distinct slots at night");
+    Set<String> done=new HashSet<>();done.add("routine-2026-11-23-2");
+    check(Store.dueRoutines("2026-11-23",java.time.ZonedDateTime.parse("2026-11-24T07:00:00+09:00"),done).size()==6,"carry previous day and keep evening meal separate");
+    db=new Fake();s=fixture(db);s.parent=true;
+    String yesterday=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).minusDays(1).toString();
+    db.docs.get("meta/state").put("routineStartDate",yesterday);
+    s.addReason(false,"기상시간 준수",3);
+    db.failCommit=true;
+    try{s.decideRoutine(yesterday,0,true);throw new AssertionError();}catch(Exception expected){}
+    db.failCommit=false;
+    check(!db.docs.containsKey("meta/routine-"+yesterday+"-0"),"failed approval remains pending");
+    s.decideRoutine(yesterday,0,true);
+    JSONObject routineLog=db.docs.get("logs/routine-"+yesterday+"-0");
+    check(routineLog.optInt("score")==3 && routineLog.optString("effectiveDate").equals(yesterday),"configured count and effective day");
+    int lifetime=db.docs.get("meta/state").optInt("lifetimeScore");
+    s.decideRoutine(yesterday,0,true);s.decideRoutine(yesterday,0,false);
+    check(db.docs.get("meta/state").optInt("lifetimeScore")==lifetime,"repeated approval cannot award twice");
+    check(db.docs.get("meta/routine-"+yesterday+"-0").optString("routineStatus").equals("approved"),"skip cannot overwrite approval");
+    s.decideRoutine(yesterday,1,false);s.decideRoutine(yesterday,1,true);
+    check(!db.docs.containsKey("logs/routine-"+yesterday+"-1"),"skipped slot cannot be awarded");
+    s.loadRoutines();
+    check(s.routinePending.stream().noneMatch(x->x.optString("day").equals(yesterday)&&x.optInt("slot")<2),"processed slots excluded from pending");
+    s.parent=false;
+    try{s.decideRoutine(yesterday,2,true);throw new AssertionError();}catch(Exception expected){}
+    check(!db.docs.containsKey("meta/routine-"+yesterday+"-2"),"child cannot approve routine");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

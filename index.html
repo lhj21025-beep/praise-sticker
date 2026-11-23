@@ -267,6 +267,7 @@
       <div id="visualizer" class="theme-container" onclick="openModal('logModal')"></div>
 
       <div id="parentControls" class="hidden space-y-4">
+        <button onclick="showRoutines(true)" class="w-full bg-indigo-50 py-3 rounded-2xl font-bold text-indigo-700">🕒 정기 칭찬 확인</button>
         <div id="reasonArea" class="hidden p-5 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 space-y-4 transition-all">
           <button id="submitBtn" onclick="executeStamp()" class="w-full py-5 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-lg flex justify-center items-center gap-2">
             <span id="btnText"></span>
@@ -1979,8 +1980,91 @@
 
     function logout() { vibrate(); localStorage.removeItem('stickerRole'); localStorage.removeItem('stickerPw'); location.reload(); }
 
+    const ROUTINE_NAMES = ['기상시간 준수','등교준비시간 준수','상차리기 및 치우기','상차리기 및 치우기','약속시간준수(숙제)','취침시간 준수'];
+    const ROUTINE_HOURS = [7,8,8,20,20,22];
+    function routineCount(state, slot) {
+      const r=(state.praiseReasons||[]).find(r=>r.name.replace(/\s+/g,'')===ROUTINE_NAMES[slot].replace(/\s+/g,''));
+      return r ? Math.max(1,Math.min(100,Number(r.count)||1)) : 1;
+    }
+    function routineKey(day,slot){return `routine-${day}-${slot}`;}
+    function dueRoutines(start, now, done) {
+      const korean = new Date(now.getTime()+9*3600000), today=korean.toISOString().slice(0,10), hour=korean.getUTCHours(), out=[];
+      for(let day=start;day<=today;day=new Date(Date.parse(day+'T00:00:00Z')+86400000).toISOString().slice(0,10))
+        for(let slot=0;slot<6;slot++)if((day<today||hour>=ROUTINE_HOURS[slot])&&!done.has(routineKey(day,slot)))out.push({day,slot});
+      return out;
+    }
+    async function pendingRoutines(){
+      await ensureAuth();
+      const ref=db.collection('meta').doc('state');
+      await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(!snap.data().routineStartDate)tx.update(ref,{routineStartDate:stickerToday()});});
+      const state=(await ref.get()).data(), records=await db.collection('meta').get();
+      return {state,rows:dueRoutines(state.routineStartDate,new Date(),new Set(records.docs.filter(d=>d.data().routineStatus).map(d=>d.id)))};
+    }
+    async function decideRoutine(day,slot,approve){
+      if(currentRole!=='parent')throw new Error('부모 화면에서만 사용할 수 있습니다.');
+      validStickerDate(day);
+      if(!Number.isInteger(slot)||slot<0||slot>=6||Date.now()<Date.parse(day+'T'+String(ROUTINE_HOURS[slot]).padStart(2,'0')+':00:00+09:00'))throw new Error('아직 확인 시간이 아닙니다.');
+      await ensureAuth();
+      const key=routineKey(day,slot), ref=db.collection('meta').doc(key), stateRef=db.collection('meta').doc('state');
+      let grantedRound=null;
+      await db.runTransaction(async tx=>{
+        const prior=await tx.get(ref), st=await tx.get(stateRef), state=st.data();
+        if(prior.exists)return;
+        if(!state.routineStartDate || day<state.routineStartDate)throw new Error('정기 칭찬 시작일 이전입니다.');
+        if(!approve){tx.set(ref,{routineStatus:'skipped',day,slot,date:new Date().toISOString()});return;}
+        const boards=await db.collection('boards').orderBy('round').get();
+        const active=boards.docs.find(d=>['진행중','완료'].includes(d.data().status))||boards.docs[boards.docs.length-1];
+        if(!active)throw new Error('스티커판을 먼저 만들어주세요.');
+        const boardSnap=await tx.get(active.ref), board=boardSnap.data(), round=board.round;
+        const logsSnap=await db.collection('logs').where('round','==',round).get();
+        const logs=(await Promise.all(logsSnap.docs.map(d=>tx.get(d.ref)))).filter(d=>d.exists).map(d=>d.data()).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+        const logRef=db.collection('logs').doc(key), existing=await tx.get(logRef);
+        if(existing.exists){tx.set(ref,{routineStatus:'approved',day,slot,date:new Date().toISOString()});return;}
+        const count=routineCount(state,slot), reason=ROUTINE_NAMES[slot], score=count+(reason===state.dailyBuff?1:0);
+        let streak=0;for(let i=logs.length-1;i>=0;i--){if(logs[i].executor==='시스템')continue;if(Number(logs[i].score)<=0)break;streak+=Number(logs[i].score);}
+        const bonus=Math.floor((streak+score)/5)-Math.floor(streak/5), before=logs.reduce((n,l)=>n+Number(l.score),0), now=new Date();
+        tx.set(logRef,{round,effectiveDate:day,date:now.toISOString(),reason:reason===state.dailyBuff?'🌟 [스페셜 미션 달성!] '+reason:reason,detail:'정기 칭찬 확인 · '+ROUTINE_HOURS[slot]+':00',executor:app.userName||'엄빠',score});
+        for(let i=0;i<bonus;i++)tx.set(db.collection('logs').doc(key+'-bonus-'+i),{round,effectiveDate:day,date:new Date(now.getTime()+1000*(i+1)).toISOString(),reason:'🔥 연속 칭찬 '+((Math.floor(streak/5)+i+1)*5)+'회 보너스!',detail:'대단해요!',executor:'시스템',score:1});
+        const boxes=Array.isArray(board.luckyBoxes)?board.luckyBoxes:(board.luckyStep?[{step:board.luckyStep,text:board.luckyText}]:[]);
+        for(const box of boxes)if(Number(box.step)>0&&before<Number(box.step)&&before+score+bonus>=Number(box.step))tx.set(db.collection('items').doc(key+'-lucky-'+box.step),{round,name:'룰렛 추첨권',type:'랜덤박스',status:'사용 전',usedDate:'',obtainedDate:now.toISOString(),prizesSnapshot:box.text||''});
+        tx.update(stateRef,{lifetimeScore:(Number(state.lifetimeScore)||0)+score});
+        tx.set(ref,{routineStatus:'approved',day,slot,date:now.toISOString()});grantedRound=round;
+      });
+      if(grantedRound!==null)await grantRewardIfEligible(grantedRound);
+    }
+    let routineShown=false, routineLoading=false;
+    async function showRoutines(force=false){
+      if(!app||!app.isParent||routineLoading||(!force&&routineShown)||isSendingStamp||stampQueue.length)return;
+      if(document.querySelector('.modal.active'))return;
+      routineLoading=true;
+      try{
+        const {state,rows}=await pendingRoutines();routineShown=true;
+        if(!rows.length){if(force)showToast('확인할 정기 칭찬이 없습니다.');return;}
+        let modal=document.getElementById('routineModal');
+        if(!modal){modal=document.createElement('div');modal.id='routineModal';modal.className='modal';document.body.appendChild(modal);}
+        modal.innerHTML='<div class="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto"><div class="flex justify-between"><b>🕒 정기 칭찬 확인</b><button onclick="closeModal(\'routineModal\')">닫기</button></div><p class="text-sm text-slate-500 my-2">이미 직접 찍은 항목은 ‘오늘은 안 함’을 선택해주세요. 미처리 항목은 다음 실행 때 다시 표시됩니다.</p><div id="routineRows"></div></div>';
+        const host=document.getElementById('routineRows');
+        for(const {day,slot} of rows){
+          const row=document.createElement('div');row.className='border rounded-xl p-3 my-2';
+          const title=document.createElement('p');title.textContent=day+' · '+ROUTINE_HOURS[slot]+':00 · '+ROUTINE_NAMES[slot]+' · '+routineCount(state,slot)+'개';row.appendChild(title);
+          const buttons=document.createElement('div');buttons.className='flex gap-2 mt-2';row.appendChild(buttons);
+          ['승인','오늘은 안 함','나중에'].forEach((label,index)=>{const b=document.createElement('button');b.className='rounded-lg px-3 py-2 '+(index===0?'bg-indigo-600 text-white':'bg-slate-100 text-slate-700');b.textContent=label;buttons.appendChild(b);
+            b.onclick=async()=>{if(routineLoading||isSendingStamp||stampQueue.length){showToast('저장 중입니다. 잠시 기다려주세요.');return;}if(index===2){buttons.textContent='나중에 확인';return;}
+              routineLoading=true;for(const child of buttons.children)child.disabled=true;
+              try{await decideRoutine(day,slot,index===0);buttons.textContent=index===0?'승인 처리됨':'오늘은 안 함';app=await getAppData(null,currentRole);renderBoard();document.getElementById('lifetimeScore').innerText=app.lifetimeScore+' pts';}
+              catch(e){showToast('처리 확인 필요: '+e.message);for(const child of buttons.children)child.disabled=false;}
+              finally{routineLoading=false;}
+            };
+          });host.appendChild(row);
+        }
+        openModal('routineModal');
+      }catch(e){showToast('정기 칭찬을 불러오지 못했습니다: '+e.message);}finally{routineLoading=false;}
+    }
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){routineShown=false;showRoutines();}});
+    setInterval(()=>{if(document.visibilityState==='visible'&&!routineShown)showRoutines();},15000);
+
     function initApp(data) {
-      document.getElementById("stampDate").value = stickerToday();
+      if (!document.getElementById("stampDate").value) document.getElementById("stampDate").value = stickerToday();
       document.getElementById("stampDate").max = stickerToday();
       if (!data) {
         showLoadErrorScreen('서버로부터 응답을 받지 못했어요. 네트워크 상태를 확인하고 다시 시도해주세요.');
@@ -1992,6 +2076,7 @@
       }
       try {
         app = data;
+        if(app.isParent)setTimeout(()=>showRoutines(),500);
         boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
         document.getElementById('userTitle').innerText = app.currentTitle;
         document.getElementById('lifetimeScore').innerText = `${app.lifetimeScore} pts`;
@@ -2729,6 +2814,7 @@
     }
 
     function executeStamp() {
+      if(routineLoading){showToast("정기 칭찬 저장 중입니다.");return;}
       if(currentMode === 'penalty' && app.currentScore <= 0) { showToast("이미 0개예요! 더 뺄 수 없어요 🙅"); return; }
 
       if(currentMode === 'recover') {
