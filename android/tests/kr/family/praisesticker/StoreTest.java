@@ -402,6 +402,9 @@ public class StoreTest {
     s.parent=false;
     try{s.decideRoutine(yesterday,2,true);throw new AssertionError();}catch(Exception expected){}
     check(!db.docs.containsKey("meta/routine-"+yesterday+"-2"),"child cannot approve routine");
+    check(Store.dueRoutines("2026-11-24",java.time.ZonedDateTime.parse("2026-11-24T21:59:00+09:00"),new HashSet<>()).size()==5,"math not due before 22");
+    check(Store.dueRoutines("2026-11-24",java.time.ZonedDateTime.parse("2026-11-24T22:00:00+09:00"),new HashSet<>()).size()==7,"math and bedtime separately due at 22");
+    check(Store.ROUTINE_NAMES[6].equals("수학연산 10문제 맞춤"),"math slot appended without changing existing IDs");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

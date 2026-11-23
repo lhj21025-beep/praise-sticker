@@ -309,8 +309,8 @@ final class Store {
     complete(r);
   }
 
-  static final String[] ROUTINE_NAMES = {"기상시간 준수", "등교준비시간 준수", "상차리기 및 치우기", "상차리기 및 치우기", "약속시간준수(숙제)", "취침시간 준수"};
-  static final int[] ROUTINE_HOURS = {7,8,8,20,20,22};
+  static final String[] ROUTINE_NAMES = {"기상시간 준수", "등교준비시간 준수", "상차리기 및 치우기", "상차리기 및 치우기", "약속시간준수(숙제)", "취침시간 준수", "수학연산 10문제 맞춤"};
+  static final int[] ROUTINE_HOURS = {7,8,8,20,20,22,22};
   static String routineKey(String day, int slot) { return "routine-"+day+"-"+slot; }
   static int routineCount(JSONObject state, int slot) {
     JSONArray reasons=array(state,"praiseReasons");
@@ -324,7 +324,7 @@ final class Store {
   static List<JSONObject> dueRoutines(String start, ZonedDateTime now, Set<String> done) {
     List<JSONObject> out=new ArrayList<>();
     for(LocalDate day=LocalDate.parse(start); !day.isAfter(now.toLocalDate()); day=day.plusDays(1))
-      for(int slot=0;slot<6;slot++) if((day.isBefore(now.toLocalDate()) || now.getHour()>=ROUTINE_HOURS[slot]) && !done.contains(routineKey(day.toString(),slot)))
+      for(int slot=0;slot<ROUTINE_NAMES.length;slot++) if((slot!=6 || !day.isBefore(LocalDate.parse("2026-11-24"))) && (day.isBefore(now.toLocalDate()) || now.getHour()>=ROUTINE_HOURS[slot]) && !done.contains(routineKey(day.toString(),slot)))
         out.add(obj("day",day.toString(),"slot",slot));
     return out;
   }
@@ -338,11 +338,11 @@ final class Store {
   }
   void decideRoutine(String date, int slot, boolean approve) throws Exception {
     requireParent();
-    if(slot<0 || slot>=6)throw new Exception("잘못된 항목입니다.");
+    if(slot<0 || slot>=ROUTINE_NAMES.length)throw new Exception("잘못된 항목입니다.");
     ZonedDateTime now=ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
     LocalDate d=LocalDate.parse(date);
     JSONObject state=db.get("meta/state",null);
-    if(date.compareTo(state.optString("routineStartDate",day(now())))<0 || d.atTime(ROUTINE_HOURS[slot],0).isAfter(now.toLocalDateTime()))throw new Exception("아직 확인 시간이 아닙니다.");
+    if((slot==6 && date.compareTo("2026-11-24")<0) || date.compareTo(state.optString("routineStartDate",day(now())))<0 || d.atTime(ROUTINE_HOURS[slot],0).isAfter(now.toLocalDateTime()))throw new Exception("아직 확인 시간이 아닙니다.");
     String key=routineKey(date,slot);
     if(approve) {
       int prior=selectedRound;
