@@ -226,6 +226,9 @@ final class Store {
   void stamp(String reason, String detail, int amount, String operationId) throws Exception { stamp(reason,detail,amount,operationId,day(now())); }
 
   void stamp(String reason, String detail, int amount, String operationId, String effectiveDate) throws Exception {
+    stamp(reason, detail, amount, operationId, effectiveDate, -1);
+  }
+  void stamp(String reason, String detail, int amount, String operationId, String effectiveDate, int routineSlot) throws Exception {
     LocalDate selected=LocalDate.parse(effectiveDate);
     if(selected.isAfter(LocalDate.now(ZoneId.of("Asia/Seoul")))) throw new Exception("미래 날짜는 선택할 수 없습니다.");
     requireParent();
@@ -238,9 +241,11 @@ final class Store {
               s = tx.get("meta/state"),
               b = tx.get("boards/" + r);
           List<JSONObject> l = tx.query("logs", "round", r);
-          if (existing != null) return;
+          JSONObject check = routineSlot < 0 ? null : tx.get("meta/routine-" + effectiveDate + "-" + routineSlot);
+          if (existing != null || check != null) return;
           if (amount < 0 && sum(l) <= 0) return;
-          int score = amount;
+          int score = routineSlot < 0 ? amount : routineCount(s, routineSlot);
+          if (routineSlot >= 0) tx.set("meta/routine-" + effectiveDate + "-" + routineSlot, obj("routineStatus", "approved", "day", effectiveDate, "slot", routineSlot, "date", timestamp));
           String label = reason;
           if (score > 0 && reason.equals(s.optString("dailyBuff"))) {
             score++;
@@ -302,6 +307,48 @@ final class Store {
         });
     lastStamp = ids;
     complete(r);
+  }
+
+  static final String[] ROUTINE_NAMES = {"기상시간 준수", "등교준비시간 준수", "상차리기 및 치우기", "상차리기 및 치우기", "약속시간준수(숙제)", "취침시간 준수"};
+  static final int[] ROUTINE_HOURS = {7,8,8,20,20,22};
+  static String routineKey(String day, int slot) { return "routine-"+day+"-"+slot; }
+  static int routineCount(JSONObject state, int slot) {
+    JSONArray reasons=array(state,"praiseReasons");
+    for(int i=0;i<reasons.length();i++) {
+      JSONObject r=reasons.optJSONObject(i);
+      if(r!=null && r.optString("name").replaceAll("\\s+", "").equals(ROUTINE_NAMES[slot].replaceAll("\\s+", ""))) return Math.max(1,Math.min(100,r.optInt("count",1)));
+    }
+    return 1;
+  }
+  List<JSONObject> routinePending = new ArrayList<>();
+  static List<JSONObject> dueRoutines(String start, ZonedDateTime now, Set<String> done) {
+    List<JSONObject> out=new ArrayList<>();
+    for(LocalDate day=LocalDate.parse(start); !day.isAfter(now.toLocalDate()); day=day.plusDays(1))
+      for(int slot=0;slot<6;slot++) if((day.isBefore(now.toLocalDate()) || now.getHour()>=ROUTINE_HOURS[slot]) && !done.contains(routineKey(day.toString(),slot)))
+        out.add(obj("day",day.toString(),"slot",slot));
+    return out;
+  }
+  void loadRoutines() throws Exception {
+    if(!parent) return;
+    db.transaction(tx->{JSONObject state=tx.get("meta/state");if(state.optString("routineStartDate").isEmpty())tx.patch("meta/state",obj("routineStartDate",day(now())));});
+    JSONObject state=db.get("meta/state",null);
+    Set<String> done=new HashSet<>();
+    for(JSONObject record:db.query("meta",null,null,null)) if(record.has("routineStatus"))done.add(record.optString("__id"));
+    routinePending=dueRoutines(state.getString("routineStartDate"),ZonedDateTime.now(ZoneId.of("Asia/Seoul")),done);
+  }
+  void decideRoutine(String date, int slot, boolean approve) throws Exception {
+    requireParent();
+    if(slot<0 || slot>=6)throw new Exception("잘못된 항목입니다.");
+    ZonedDateTime now=ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
+    LocalDate d=LocalDate.parse(date);
+    JSONObject state=db.get("meta/state",null);
+    if(date.compareTo(state.optString("routineStartDate",day(now())))<0 || d.atTime(ROUTINE_HOURS[slot],0).isAfter(now.toLocalDateTime()))throw new Exception("아직 확인 시간이 아닙니다.");
+    String key=routineKey(date,slot);
+    if(approve) {
+      int prior=selectedRound;
+      try {selectedRound=0;load();stamp(ROUTINE_NAMES[slot],"정기 칭찬 확인 · "+ROUTINE_HOURS[slot]+":00",1,key,date,slot);}
+      finally {selectedRound=prior;}
+    } else db.transaction(tx->{if(tx.get("meta/"+key)==null)tx.set("meta/"+key,obj("routineStatus","skipped","day",date,"slot",slot,"date",now()));});
   }
 
   static int stickerRewardCount(JSONObject item) {

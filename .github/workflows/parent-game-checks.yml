@@ -25,6 +25,7 @@ jobs:
         run: |
           node tests/sticker-approval.test.cjs
           node tests/parent-game-use.test.cjs
+          node tests/routines.test.cjs
       - name: Prepare Android test dependencies
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
