@@ -1980,8 +1980,8 @@
 
     function logout() { vibrate(); localStorage.removeItem('stickerRole'); localStorage.removeItem('stickerPw'); location.reload(); }
 
-    const ROUTINE_NAMES = ['기상시간 준수','등교준비시간 준수','상차리기 및 치우기','상차리기 및 치우기','약속시간준수(숙제)','취침시간 준수'];
-    const ROUTINE_HOURS = [7,8,8,20,20,22];
+    const ROUTINE_NAMES = ['기상시간 준수','등교준비시간 준수','상차리기 및 치우기','상차리기 및 치우기','약속시간준수(숙제)','취침시간 준수','수학연산 10문제 맞춤'];
+    const ROUTINE_HOURS = [7,8,8,20,20,22,22];
     function routineCount(state, slot) {
       const r=(state.praiseReasons||[]).find(r=>r.name.replace(/\s+/g,'')===ROUTINE_NAMES[slot].replace(/\s+/g,''));
       return r ? Math.max(1,Math.min(100,Number(r.count)||1)) : 1;
@@ -1990,7 +1990,7 @@
     function dueRoutines(start, now, done) {
       const korean = new Date(now.getTime()+9*3600000), today=korean.toISOString().slice(0,10), hour=korean.getUTCHours(), out=[];
       for(let day=start;day<=today;day=new Date(Date.parse(day+'T00:00:00Z')+86400000).toISOString().slice(0,10))
-        for(let slot=0;slot<6;slot++)if((day<today||hour>=ROUTINE_HOURS[slot])&&!done.has(routineKey(day,slot)))out.push({day,slot});
+        for(let slot=0;slot<ROUTINE_NAMES.length;slot++)if((slot!==6||day>='2026-11-24')&&(day<today||hour>=ROUTINE_HOURS[slot])&&!done.has(routineKey(day,slot)))out.push({day,slot});
       return out;
     }
     async function pendingRoutines(){
@@ -2003,7 +2003,7 @@
     async function decideRoutine(day,slot,approve){
       if(currentRole!=='parent')throw new Error('부모 화면에서만 사용할 수 있습니다.');
       validStickerDate(day);
-      if(!Number.isInteger(slot)||slot<0||slot>=6||Date.now()<Date.parse(day+'T'+String(ROUTINE_HOURS[slot]).padStart(2,'0')+':00:00+09:00'))throw new Error('아직 확인 시간이 아닙니다.');
+      if(!Number.isInteger(slot)||slot<0||slot>=ROUTINE_NAMES.length||(slot===6&&day<'2026-11-24')||Date.now()<Date.parse(day+'T'+String(ROUTINE_HOURS[slot]).padStart(2,'0')+':00:00+09:00'))throw new Error('아직 확인 시간이 아닙니다.');
       await ensureAuth();
       const key=routineKey(day,slot), ref=db.collection('meta').doc(key), stateRef=db.collection('meta').doc('state');
       let grantedRound=null;

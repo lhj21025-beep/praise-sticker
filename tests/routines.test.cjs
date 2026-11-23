@@ -22,6 +22,9 @@ function reset(){docs=new Map();serial=0;fail=false;completed=[];docs.set('meta/
  assert.equal(ctx.dueRoutines('2026-11-23',new Date('2026-11-23T06:59:00+09:00'),new Set()).length,0);
  assert.equal(ctx.dueRoutines('2026-11-23',new Date('2026-11-23T23:00:00+09:00'),new Set()).length,6);
  assert.equal(ctx.dueRoutines('2026-11-23',new Date('2026-11-24T07:00:00+09:00'),new Set(['routine-2026-11-23-2'])).length,6);
+ assert.equal(ctx.dueRoutines('2026-11-24',new Date('2026-11-24T21:59:00+09:00'),new Set()).length,5);
+ assert.equal(ctx.dueRoutines('2026-11-24',new Date('2026-11-24T22:00:00+09:00'),new Set()).length,7);
+ assert.equal(ctx.dueRoutines('2026-11-24',new Date('2026-11-24T22:00:00+09:00'),new Set(['routine-2026-11-24-5'])).some(x=>x.slot===6),true);
  reset();fail=true;await assert.rejects(()=>ctx.decideRoutine('2026-11-02',0,true));assert.equal(docs.size,2);fail=false;
  await ctx.decideRoutine('2026-11-02',0,true);
  assert.equal(docs.get('logs/routine-2026-11-02-0').score,5);
