@@ -405,6 +405,24 @@ public class StoreTest {
     check(Store.dueRoutines("2026-11-24",java.time.ZonedDateTime.parse("2026-11-24T21:59:00+09:00"),new HashSet<>()).size()==5,"math not due before 22");
     check(Store.dueRoutines("2026-11-24",java.time.ZonedDateTime.parse("2026-11-24T22:00:00+09:00"),new HashSet<>()).size()==7,"math and bedtime separately due at 22");
     check(Store.ROUTINE_NAMES[6].equals("수학연산 10문제 맞춤"),"math slot appended without changing existing IDs");
+    db=new Fake();s=fixture(db);s.parent=true;
+    db.docs.get("meta/state").put("routineStartDate",yesterday);db.docs.get("meta/state").put("lifetimeScore",28);
+    db.seed("logs/base",obj("round",25,"score",24,"executor","시스템","date","2026-11-01T00:00:00Z","effectiveDate",yesterday));
+    db.seed("logs/streak",obj("round",25,"score",4,"executor","엄빠","date","2026-11-01T01:00:00Z","effectiveDate",yesterday));
+    s.load();s.decideRoutine(yesterday,0,true);
+    check(Store.sum(db.query("logs","round",25,null))==30,"28 plus stamp and combo fills board");
+    s.decideRoutine(yesterday,1,true);s.decideRoutine(yesterday,2,true);
+    check(Store.sum(db.query("logs","round",25,null))==30 && Store.sum(db.query("logs","round",26,null))==2,"three approvals carry two points to next board");
+    check(db.docs.get("boards/26").optInt("targetScore")==30 && db.docs.get("boards/26").optString("reward").equals(db.docs.get("boards/25").optString("reward")),"same target and reward");
+    check(db.docs.get("meta/state").optInt("lifetimeScore")==31,"carry does not increase lifetime score");
+    s.decideRoutine(yesterday,2,true);check(Store.sum(db.query("logs","round",26,null))==2,"retry after rollover does not duplicate");
+    db=new Fake();s=fixture(db);s.parent=true;
+    db.seed("logs/large",obj("round",25,"score",95,"executor","엄빠","date","2026-11-01T00:00:00Z","effectiveDate",yesterday));
+    db.failCommit=true;try{s.splitOverflow(25);throw new AssertionError();}catch(Exception expected){}db.failCommit=false;
+    check(Store.sum(db.query("logs","round",25,null))==95,"failed carry retains all points");
+    s.splitOverflow(25);
+    check(Store.sum(db.query("logs","round",25,null))==30 && Store.sum(db.query("logs","round",26,null))==30 && Store.sum(db.query("logs","round",27,null))==30 && Store.sum(db.query("logs","round",28,null))==5,"large overflow spans multiple boards");
+    check(db.docs.get("logs/large-carry-28-2").optString("effectiveDate").equals(yesterday),"carry preserves effective date");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

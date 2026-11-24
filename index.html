@@ -784,6 +784,7 @@
           score: score > 0 ? `+${score}` : score, rawScore: score, runningTotal: currentScore, ts: l.ts
         });
       });
+      if(role==='parent' && currentScore>Number(currentBoard.targetScore) && await splitOverflow(currentBoard.round))return getAppData(null,role);
       logs.sort((a,b) => b.ts - a.ts);
       let bestPraise = Object.keys(countsByReason).length > 0 ? Object.keys(countsByReason).reduce((a,b) => countsByReason[a] > countsByReason[b] ? a : b) : "아직 없음";
       let currentStreak = 0;
@@ -920,6 +921,7 @@
     async function addStampRecord(round, reason, detail, score, executor, role, effectiveDate) {
       effectiveDate = validStickerDate(effectiveDate || stickerToday());
       await ensureAuth();
+      if(score>0){const boards=await db.collection('boards').orderBy('round').get();const active=boards.docs.find(d=>['진행중','완료'].includes(d.data().status))||boards.docs[boards.docs.length-1];if(active)round=active.data().round;}
       const logsSnap = await db.collection('logs').where('round','==',round).get();
       let curScore = 0;
       const roundLogs = [];
@@ -981,8 +983,9 @@
         }
       }
 
+      const carried=score>0 && await splitOverflow(round);
       const newlyCompleted = await grantRewardIfEligible(round);
-      return { data: await getAppData(round, role), rowsAdded: addedIds, newlyCompleted, grantedLuckySteps: grantedSteps };
+      return { data: await getAppData(carried?null:round, role), rowsAdded: addedIds, newlyCompleted, grantedLuckySteps: grantedSteps };
     }
 
     async function recoverLastPenalty(round, role) {
@@ -2000,6 +2003,50 @@
       const state=(await ref.get()).data(), records=await db.collection('meta').get();
       return {state,rows:dueRoutines(state.routineStartDate,new Date(),new Set(records.docs.filter(d=>d.data().routineStatus).map(d=>d.id)))};
     }
+    async function splitOverflow(sourceRound){
+      let changed=false;
+      await db.runTransaction(async tx=>{
+        changed=false;
+        const stateRef=db.collection('meta').doc('state'), sourceRef=db.collection('boards').doc(String(sourceRound));
+        const stateSnap=await tx.get(stateRef), sourceSnap=await tx.get(sourceRef);
+        if(!sourceSnap.exists)return;
+        const source=sourceSnap.data(), target=Number(source.targetScore);
+        const logQuery=await db.collection('logs').where('round','==',sourceRound).get();
+        const snapshots=await Promise.all(logQuery.docs.map(d=>tx.get(d.ref)));
+        const logs=snapshots.filter(d=>d.exists).map(d=>({id:d.id,ref:d.ref,...d.data()})).sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
+        let excess=logs.reduce((n,l)=>n+Number(l.score),0)-target;
+        if(!(target>0)||excess<=0)return;
+        const boards=await db.collection('boards').get(), rewards=await db.collection('items').where('round','==',sourceRound).get();
+        const rewardRef=db.collection('items').doc('board-completion-'+sourceRound), rewardSnap=await tx.get(rewardRef);
+        const latestBoards=await Promise.all(boards.docs.map(d=>tx.get(d.ref)));
+        let next=Math.max(sourceRound,...latestBoards.filter(d=>d.exists).map(d=>Number(d.data().round)))+1,filled=0;
+        const moved=[],retained=[],allocations=[],newBoards=[];
+        for(const log of logs){const take=Math.min(Math.max(0,Number(log.score)),excess);if(!take)continue;moved.push({...log,score:take});retained.push({...log,score:Number(log.score)-take});excess-=take;if(!excess)break;}
+        for(const log of moved.reverse()){
+          let remaining=log.score,part=0;
+          while(remaining>0){
+            if(filled===target){next++;filled=0;}
+            if(filled===0)newBoards.push({round:next,targetScore:target,reward:source.reward,theme:source.theme||'rivals',status:'진행중',luckyBoxes:[],autoCarryFrom:sourceRound});
+            const take=Math.min(target-filled,remaining),{ref,id,...data}=log;
+            allocations.push({id:id+'-carry-'+next+'-'+part++,data:{...data,round:next,score:take,carrySource:id}});remaining-=take;filled+=take;
+          }
+        }
+        // Read all newly allocated IDs before writes to guard concurrent round creation.
+        for(const b of newBoards){const existing=await tx.get(db.collection('boards').doc(String(b.round)));if(existing.exists)throw new Error('새 회차가 변경되었습니다. 다시 시도해주세요.');}
+        for(const old of retained){const pieces=allocations.filter(x=>x.data.carrySource===old.id);
+          if(old.score===0&&pieces.length===1){tx.update(old.ref,{round:pieces[0].data.round,score:pieces[0].data.score});allocations.splice(allocations.indexOf(pieces[0]),1);}
+          else tx.update(old.ref,{score:old.score});
+        }
+        for(const x of allocations)tx.set(db.collection('logs').doc(x.id),x.data);
+        const reward=round=>({round,name:source.reward,type:'보상',status:'사용 전',usedDate:'',obtainedDate:new Date().toISOString(),rewardSource:'board-completion'});
+        tx.update(sourceRef,{status:'보상 수령 완료'});
+        if(!rewardSnap.exists&&!rewards.docs.some(d=>isBoardCompletionReward(d.data())))tx.set(rewardRef,reward(sourceRound));
+        for(const b of newBoards){if(b.round<next||filled===target){b.status='보상 수령 완료';tx.set(db.collection('items').doc('board-completion-'+b.round),reward(b.round));}tx.set(db.collection('boards').doc(String(b.round)),b);}
+        tx.update(stateRef,{carryRevision:(Number(stateSnap.data().carryRevision)||0)+1});changed=true;
+      });
+      return changed;
+    }
+
     async function decideRoutine(day,slot,approve){
       if(currentRole!=='parent')throw new Error('부모 화면에서만 사용할 수 있습니다.');
       validStickerDate(day);
@@ -2030,7 +2077,7 @@
         tx.update(stateRef,{lifetimeScore:(Number(state.lifetimeScore)||0)+score});
         tx.set(ref,{routineStatus:'approved',day,slot,date:now.toISOString()});grantedRound=round;
       });
-      if(grantedRound!==null)await grantRewardIfEligible(grantedRound);
+      if(grantedRound!==null){await splitOverflow(grantedRound);await grantRewardIfEligible(grantedRound);}
     }
     let routineShown=false, routineLoading=false;
     async function showRoutines(force=false){
@@ -2050,9 +2097,9 @@
           const buttons=document.createElement('div');buttons.className='flex gap-2 mt-2';row.appendChild(buttons);
           ['승인','오늘은 안 함','나중에'].forEach((label,index)=>{const b=document.createElement('button');b.className='rounded-lg px-3 py-2 '+(index===0?'bg-indigo-600 text-white':'bg-slate-100 text-slate-700');b.textContent=label;buttons.appendChild(b);
             b.onclick=async()=>{if(routineLoading||isSendingStamp||stampQueue.length){showToast('저장 중입니다. 잠시 기다려주세요.');return;}if(index===2){buttons.textContent='나중에 확인';return;}
-              routineLoading=true;for(const child of buttons.children)child.disabled=true;
+              routineLoading=true;const originalButtons=[...buttons.children];buttons.textContent='저장 중…';
               try{await decideRoutine(day,slot,index===0);buttons.textContent=index===0?'승인 처리됨':'오늘은 안 함';app=await getAppData(null,currentRole);renderBoard();document.getElementById('lifetimeScore').innerText=app.lifetimeScore+' pts';}
-              catch(e){showToast('처리 확인 필요: '+e.message);for(const child of buttons.children)child.disabled=false;}
+              catch(e){showToast('처리 확인 필요: '+e.message);buttons.replaceChildren(...originalButtons);}
               finally{routineLoading=false;}
             };
           });host.appendChild(row);
@@ -2840,12 +2887,6 @@
           .recoverLastPenalty(app.currentBoard.round, currentRole);
         return;
       }
-
-      if (isStampCoolingDown) return;
-      isStampCoolingDown = true;
-      const submitButtonEl = document.getElementById('submitBtn');
-      submitButtonEl.disabled = true;
-      setTimeout(() => { isStampCoolingDown = false; submitButtonEl.disabled = false; }, 1000);
 
       vibrate(40);
       const reason = document.getElementById('reasonSelect').value;

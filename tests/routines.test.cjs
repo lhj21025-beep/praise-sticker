@@ -15,7 +15,7 @@ const db={collection,runTransaction:async callback=>{
  if(fail)throw Error('network failure');for(const [p,d,merge]of writes)docs.set(p,merge?{...docs.get(p),...clone(d)}:clone(d));
 }};
 
-const ctx=vm.createContext({db,ensureAuth:async()=>{},currentRole:'parent',app:{userName:'엄빠'},validStickerDate:d=>d,stickerToday:()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10),grantRewardIfEligible:async r=>completed.push(r),console});
+const ctx=vm.createContext({db,ensureAuth:async()=>{},currentRole:'parent',app:{userName:'엄빠'},validStickerDate:d=>d,stickerToday:()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10),grantRewardIfEligible:async r=>completed.push(r),isBoardCompletionReward:i=>i.rewardSource==='board-completion'||i.type==='보상',console});
 vm.runInContext(html.slice(html.indexOf('    const ROUTINE_NAMES'),html.indexOf('    let routineShown')),ctx);
 function reset(){docs=new Map();serial=0;fail=false;completed=[];docs.set('meta/state',{routineStartDate:'2026-11-01',lifetimeScore:0,praiseReasons:[{name:'기상시간 준수',count:5}]});docs.set('boards/25',{round:25,status:'진행중',targetScore:30,luckyBoxes:[{step:5,text:'prizes'}]});}
 (async()=>{
@@ -38,5 +38,20 @@ function reset(){docs=new Map();serial=0;fail=false;completed=[];docs.set('meta/
  assert.equal(docs.has('logs/routine-2026-11-02-1'),false);
  ctx.currentRole='child';await assert.rejects(()=>ctx.decideRoutine('2026-11-02',2,true));
  ctx.currentRole='parent';await assert.rejects(()=>ctx.decideRoutine('2999-01-01',2,true));
+ reset();docs.set('meta/state',{routineStartDate:'2026-11-01',lifetimeScore:28,praiseReasons:[]});
+ docs.set('logs/base',{round:25,score:24,executor:'시스템',date:'2026-11-01T00:00:00Z',effectiveDate:'2026-11-01'});
+ docs.set('logs/streak',{round:25,score:4,executor:'엄빠',date:'2026-11-01T01:00:00Z',effectiveDate:'2026-11-01'});
+ const total=r=>[...docs.entries()].filter(([p,d])=>p.startsWith('logs/')&&d.round===r).reduce((n,[p,d])=>n+d.score,0);
+ await ctx.decideRoutine('2026-11-02',0,true);assert.equal(total(25),30);
+ await ctx.decideRoutine('2026-11-02',1,true);await ctx.decideRoutine('2026-11-02',2,true);
+ assert.equal(total(25),30);assert.equal(total(26),2);assert.equal(docs.get('boards/26').targetScore,30);
+ assert.equal(docs.get('boards/26').reward,docs.get('boards/25').reward);
+ assert.equal(docs.get('meta/state').lifetimeScore,31);
+ await ctx.decideRoutine('2026-11-02',2,true);assert.equal(total(26),2);
+ reset();docs.set('logs/old',{round:25,score:95,executor:'엄빠',date:'2026-11-01T00:00:00Z',effectiveDate:'2026-11-01'});docs.get('meta/state').lifetimeScore=95;
+ fail=true;await assert.rejects(()=>ctx.splitOverflow(25));fail=false;assert.equal(total(25),95);
+ await ctx.splitOverflow(25);assert.deepEqual([25,26,27,28].map(total),[30,30,30,5]);assert.equal(docs.get('meta/state').lifetimeScore,95);
+ assert.equal(docs.get('logs/old-carry-28-2').effectiveDate,'2026-11-01');
+ const savedSize=docs.size;await ctx.splitOverflow(25);assert.equal(docs.size,savedSize);
  console.log('PASS: routine time boundaries, backlog, atomic failure, reward effects, duplicate/skip protection and parent gate; no production writes');
 })().catch(e=>{console.error(e);process.exitCode=1;});
