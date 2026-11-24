@@ -674,7 +674,18 @@ public class MainActivity extends Activity {
       add(row,text(Store.ROUTINE_NAMES[slot]+" · "+Store.routineCount(s.state,slot)+"개",16,INK,true));
       Runnable[] actions=new Runnable[3];
       for(int i=0;i<2;i++) { final boolean approve=i==0;
-        actions[i]=()->run("확인 저장 중…",()->{s.decideRoutine(day,slot,approve);s.load();},()->{row.removeAllViews();add(row,text(day+" · "+Store.ROUTINE_NAMES[slot]+(approve?" — 승인 처리됨":" — 오늘은 안 함"),14,MUTED,true));render();});
+        actions[i]=()->{
+          if(busy){toast("앞선 항목을 저장 중입니다.");return;}
+          LinearLayout controls=(LinearLayout)row.getChildAt(row.getChildCount()-1);
+          controls.setVisibility(View.GONE);
+          TextView status=text("저장 중…",14,MUTED,true);add(row,status);
+          run("확인 저장 중…",()->{
+            try{s.decideRoutine(day,slot,approve);}
+            catch(Exception e){main.post(()->{row.removeView(status);controls.setVisibility(View.VISIBLE);});throw e;}
+            main.post(()->status.setText(approve?"승인 처리됨":"오늘은 안 함"));
+            s.load();
+          },()->render());
+        };
       }
       actions[2]=()->{row.removeAllViews();add(row,text(day+" · "+Store.ROUTINE_NAMES[slot]+" — 나중에 확인",14,MUTED,false));};
       buttons(row,new String[]{"승인","오늘은 안 함","나중에"},new int[]{PURPLE,MUTED,MUTED},actions);
@@ -1662,7 +1673,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.5.1\n"
+            "칭찬 스티커 1.5.2\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",

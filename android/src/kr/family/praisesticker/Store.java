@@ -121,6 +121,7 @@ final class Store {
     childGameNotices = new ArrayList<>();
     if (!parent) for (JSONObject x : i)
       if (x.optString("usedByRole").equals("parent") && x.optString("parentUseNoticeStatus").equals("대기 중")) childGameNotices.add(x);
+    if(parent && sum(l)>current.optInt("targetScore",30) && splitOverflow(current.optInt("round"))) { selectedRound=0;load();return; }
     score = sum(l);
     streak = streak(l);
     Map<String, Integer> counts = new LinkedHashMap<>();
@@ -187,6 +188,65 @@ final class Store {
         "",
         "obtainedDate",
         now());
+  }
+
+  // Move already-earned points; never mint lifetime points or recalculate bonuses here.
+  boolean splitOverflow(int sourceRound) throws Exception {
+    final boolean[] changed={false};
+    final List<Integer> completed=new ArrayList<>();
+    db.transaction(tx->{
+      changed[0]=false;completed.clear();
+      JSONObject state=tx.get("meta/state"), source=tx.get("boards/"+sourceRound);
+      List<JSONObject> logs=tx.query("logs","round",sourceRound);
+      if(source==null)return;
+      int target=source.optInt("targetScore",30), excess=sum(logs)-target;
+      if(target<1 || excess<=0)return;
+      List<JSONObject> all=tx.query("boards",null,null), rewards=tx.query("items","round",sourceRound);
+      int max=sourceRound;for(JSONObject b:all)max=Math.max(max,b.optInt("round"));
+      sortDate(logs,"date",true);
+      List<JSONObject> moved=new ArrayList<>();
+      List<JSONObject> retained=new ArrayList<>();
+      for(JSONObject log:logs){
+        int take=Math.min(Math.max(0,log.optInt("score")),excess);
+        if(take==0)continue;
+        JSONObject copy=new JSONObject(log.toString());put(copy,"score",take);moved.add(copy);
+        put(log,"score",log.optInt("score")-take);retained.add(log);excess-=take;
+        if(excess==0)break;
+      }
+      Collections.reverse(moved);
+      int next=max+1, filled=0;
+      List<JSONObject> allocations=new ArrayList<>(), newBoards=new ArrayList<>();
+      for(JSONObject log:moved){
+        int remaining=log.optInt("score"), part=0;
+        while(remaining>0){
+          if(filled==target){next++;filled=0;}
+          if(filled==0)newBoards.add(obj("round",next,"targetScore",target,"reward",source.optString("reward"),"theme",source.optString("theme","rivals"),"status","진행중","luckyBoxes",new JSONArray(),"autoCarryFrom",sourceRound));
+          int take=Math.min(target-filled,remaining);
+          JSONObject copy=new JSONObject(log.toString());
+          put(copy,"round",next);put(copy,"score",take);put(copy,"carrySource",log.optString("__id"));
+          put(copy,"__carryId",log.optString("__id")+"-carry-"+next+"-"+(part++));allocations.add(copy);
+          remaining-=take;filled+=take;
+        }
+      }
+      // Preserve original log IDs when the entire entry moves (including undo references).
+      for(JSONObject old:retained){
+        List<JSONObject> pieces=new ArrayList<>();for(JSONObject x:allocations)if(x.optString("carrySource").equals(old.optString("__id")))pieces.add(x);
+        if(old.optInt("score")==0 && pieces.size()==1){JSONObject x=pieces.get(0);tx.patch("logs/"+old.optString("__id"),obj("round",x.optInt("round"),"score",x.optInt("score")));allocations.remove(x);}
+        else tx.patch("logs/"+old.optString("__id"),obj("score",old.optInt("score")));
+      }
+      for(JSONObject x:allocations){String id=x.optString("__carryId");x.remove("__carryId");x.remove("__id");x.remove("__path");x.remove("__updateTime");tx.set("logs/"+id,x);}
+      tx.patch("boards/"+sourceRound,obj("status","보상 수령 완료"));
+      boolean has=false;for(JSONObject reward:rewards)if(reward.optInt("round")==sourceRound && completion(reward))has=true;
+      if(!has){JSONObject reward=item(sourceRound,source.optString("reward"),"보상");put(reward,"rewardSource","board-completion");tx.set("items/board-completion-"+sourceRound,reward);}
+      for(JSONObject b:newBoards){
+        int r=b.optInt("round");boolean full=r<next || filled==target;
+        if(full){put(b,"status","보상 수령 완료");JSONObject reward=item(r,b.optString("reward"),"보상");put(reward,"rewardSource","board-completion");tx.set("items/board-completion-"+r,reward);}
+        tx.set("boards/"+r,b);
+      }
+      tx.patch("meta/state",obj("carryRevision",state.optInt("carryRevision")+1));
+      changed[0]=true;
+    });
+    return changed[0];
   }
 
   void complete(int round) throws Exception {
@@ -307,6 +367,7 @@ final class Store {
         });
     lastStamp = ids;
     complete(r);
+    if(amount>0 && splitOverflow(r))selectedRound=0;
   }
 
   static final String[] ROUTINE_NAMES = {"기상시간 준수", "등교준비시간 준수", "상차리기 및 치우기", "상차리기 및 치우기", "약속시간준수(숙제)", "취침시간 준수", "수학연산 10문제 맞춤"};
@@ -346,7 +407,12 @@ final class Store {
     String key=routineKey(date,slot);
     if(approve) {
       int prior=selectedRound;
-      try {selectedRound=0;load();stamp(ROUTINE_NAMES[slot],"정기 칭찬 확인 · "+ROUTINE_HOURS[slot]+":00",1,key,date,slot);}
+      try {selectedRound=0;
+        List<JSONObject> available=db.query("boards",null,null,null);available.sort(Comparator.comparingInt(x->x.optInt("round")));
+        JSONObject active=null;for(JSONObject b:available)if(b.optString("status").equals("진행중")||b.optString("status").equals("완료")){active=b;break;}
+        if(active==null && !available.isEmpty())active=available.get(available.size()-1);
+        if(active==null)throw new Exception("스티커판이 없습니다.");board=active;
+        stamp(ROUTINE_NAMES[slot],"정기 칭찬 확인 · "+ROUTINE_HOURS[slot]+":00",1,key,date,slot);}
       finally {selectedRound=prior;}
     } else db.transaction(tx->{if(tx.get("meta/"+key)==null)tx.set("meta/"+key,obj("routineStatus","skipped","day",date,"slot",slot,"date",now()));});
   }
