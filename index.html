@@ -127,9 +127,6 @@
     #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1e293b; color: white; padding: 14px 28px; border-radius: 40px; font-weight: bold; transition: transform 0.3s; z-index: 200; opacity: 0; text-align: center; white-space: nowrap; }
     #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     
-    #undoBar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(120px); background: #334155; color: white; padding: 16px 24px; border-radius: 20px; width: 90%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; transition: transform 0.3s; z-index: 150; }
-    #undoBar.show { transform: translateX(-50%) translateY(0); }
-    .progress-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: #fbbf24; border-radius: 0 0 20px 20px; width: 100%; }
     
     .claim-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.85); z-index: 50; display: flex; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(4px); border-radius: 1.5rem; }
 
@@ -611,12 +608,6 @@
   </div>
 
   <div id="toast">메시지</div>
-  <div id="undoBar">
-    <div class="text-sm"><p class="font-black">도장 쾅! 완료</p><p class="text-[10px] text-slate-400">잘못 찍었다면 취소하세요</p></div>
-    <button onclick="cancelUndo()" class="bg-indigo-500 px-4 py-2 rounded-xl text-xs font-black active:scale-95 transition">UNDO</button>
-    <div class="progress-bar" id="undoProgress"></div>
-  </div>
-
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
@@ -1725,8 +1716,6 @@
     let app = {};
 
     let isProcessing = false;
-    let undoTimer = null;
-    let undoRows = 0;
     
     let currentBoxType = '보상'; 
     let currentItemTab = 'unused'; 
@@ -1741,7 +1730,6 @@
     let syncHideTimer = null;
 
     let isChangingPassword = false;
-    let isUndoingStamp = false;
     let isAddingReason = false;
     let isCreatingBoard = false;
     let isChangingTheme = false;
@@ -2941,7 +2929,6 @@
           app.lifetimeScore = res.data.lifetimeScore + pendingLifetimeSum;
           app.currentStreak = res.data.currentStreak + pendingStreakCount;
 
-          undoRows = res.rowsAdded;
           boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app));
 
           if (res.newlyCompleted) {
@@ -2961,7 +2948,6 @@
           if (job.prevScore < p80 && res.data.currentScore >= p80) { showToast("🔥 거의 다 왔어요! 80% 달성!"); confetti({ particleCount: 70 }); }
 
           renderBoard();
-          showUndoBar();
           hideSyncIndicator();
           isSendingStamp = false;
           processStampQueue();
@@ -2984,32 +2970,6 @@
     }
 
     function applyPenaltyEffect() { document.getElementById('visualizer').classList.add('shake'); setTimeout(() => document.getElementById('visualizer').classList.remove('shake'), 400); }
-    function showUndoBar() {
-      clearTimeout(undoTimer);
-      const bar = document.getElementById('undoBar');
-      const prog = document.getElementById('undoProgress');
-      bar.classList.add('show');
-      prog.style.transition = 'none';
-      prog.style.width = '100%';
-      setTimeout(() => { prog.style.transition = 'width 10s linear'; prog.style.width = '0%'; }, 50);
-      undoTimer = setTimeout(() => { bar.classList.remove('show'); }, 10000);
-    }
-    function cancelUndo() {
-      if (isUndoingStamp) return;
-      isUndoingStamp = true;
-      vibrate();
-      clearTimeout(undoTimer);
-      document.getElementById('undoBar').classList.remove('show');
-      showSyncIndicator('취소 처리 중...');
-      google.script.run.withSuccessHandler(res => {
-        app = res; boardCache[String(app.currentBoard.round)] = JSON.parse(JSON.stringify(app)); renderBoard(); showToast("기록이 취소되었습니다. ↩️"); hideSyncIndicator();
-        isUndoingStamp = false;
-      }).withFailureHandler(err => {
-        showSyncError("취소 실패: " + err.message);
-        isUndoingStamp = false;
-      })
-      .undoLastStamps(app.currentBoard.round, undoRows, currentRole);
-    }
     function openModal(id) { vibrate(); document.getElementById(id).classList.add('active'); }
 
     // 🏅 지금 점수 기준으로 현재 달성한 단계를 강조하며 전체 레벨 목록을 그려줍니다.
