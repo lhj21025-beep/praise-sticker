@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="kr.family.praisesticker" android:versionCode="10" android:versionName="1.5.2">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="kr.family.praisesticker" android:versionCode="11" android:versionName="1.5.3">
  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35"/>
  <uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.VIBRATE"/>
  <application android:label="칭찬 스티커" android:theme="@style/AppTheme" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">

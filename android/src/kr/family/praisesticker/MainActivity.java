@@ -526,12 +526,6 @@ public class MainActivity extends Activity {
             () -> stampForm(true),
             () -> confirm("마지막 차감을 만회하고 1칸을 추가할까요?", () -> change("만회", () -> s.recover(id())))
           });
-      if (!s.lastStamp.isEmpty())
-        btn(
-            body,
-            "↩ 방금 찍은 도장 취소",
-            0xff64748b,
-            () -> confirm("방금 추가한 도장과 연속 보너스를 취소할까요?", () -> change("도장 취소", s::undo)));
       buttons(
           body,
           new String[] {"🎁 럭키박스", "🌟 미션"},
@@ -1673,7 +1667,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.5.2\n"
+            "칭찬 스티커 1.5.3\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",
