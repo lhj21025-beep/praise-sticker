@@ -423,6 +423,15 @@ public class StoreTest {
     s.splitOverflow(25);
     check(Store.sum(db.query("logs","round",25,null))==30 && Store.sum(db.query("logs","round",26,null))==30 && Store.sum(db.query("logs","round",27,null))==30 && Store.sum(db.query("logs","round",28,null))==5,"large overflow spans multiple boards");
     check(db.docs.get("logs/large-carry-28-2").optString("effectiveDate").equals(yesterday),"carry preserves effective date");
+    JSONObject configured=obj("praiseReasons",arr(obj("name","기상 시간 준수","count",2),obj("name","등교준비시간 준수","count",3),obj("name","상차리기 및 치우기","count",4),obj("name","약속시간 준수 숙제","count",5),obj("name","취침시간 준수","count",6),obj("name","수학10문제 맞춤","count",3)));
+    int[] expectedCounts={2,3,4,4,5,6,3};
+    for(int i=0;i<7;i++)check(Store.routineCount(configured,i)==expectedCounts[i],"configured count slot "+i);
+    check(Store.routineCount(obj(),6)==3,"math defaults to three");
+    try{Store.routineCount(obj("praiseReasons",arr(obj("name","수학10문제 맞춤","count",0))),6);throw new AssertionError();}catch(IllegalArgumentException expected){}
+    db=new Fake();s=fixture(db);s.parent=true;db.docs.get("meta/state").put("routineStartDate","2026-11-24");
+    s.addReason(false,"수학10문제 맞춤",3);s.decideRoutine("2026-11-24",6,true);
+    check(db.docs.get("logs/routine-2026-11-24-6").optInt("score")==3,"math approval actually grants three");
+    check(db.docs.get("logs/routine-2026-11-24-6").optString("reason").equals("수학10문제 맞춤"),"matched reason name retained");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

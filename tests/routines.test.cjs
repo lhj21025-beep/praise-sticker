@@ -53,5 +53,14 @@ function reset(){docs=new Map();serial=0;fail=false;completed=[];docs.set('meta/
  await ctx.splitOverflow(25);assert.deepEqual([25,26,27,28].map(total),[30,30,30,5]);assert.equal(docs.get('meta/state').lifetimeScore,95);
  assert.equal(docs.get('logs/old-carry-28-2').effectiveDate,'2026-11-01');
  const savedSize=docs.size;await ctx.splitOverflow(25);assert.equal(docs.size,savedSize);
+ const configured={praiseReasons:[{name:'기상 시간 준수',count:2},{name:'등교준비시간 준수',count:3},{name:'상차리기 및 치우기',count:4},{name:'약속시간 준수 숙제',count:5},{name:'취침시간 준수',count:6},{name:'수학10문제 맞춤',count:3}]};
+ assert.deepEqual(Array.from({length:7},(_,i)=>ctx.routineCount(configured,i)),[2,3,4,4,5,6,3]);
+ assert.equal(ctx.routineCount({},6),3);
+ configured.praiseReasons[5].count=7;assert.equal(ctx.routineCount(configured,6),7);
+ assert.throws(()=>ctx.routineCount({praiseReasons:[{name:'수학10문제 맞춤',count:0}]},6));
+ assert.throws(()=>ctx.routineCount({praiseReasons:[{name:'수학10문제 맞춤',count:3},{name:'수학연산 10문제 맞춤',count:1}]},6));
+ reset();docs.get('meta/state').praiseReasons=[{name:'수학10문제 맞춤',count:3}];
+ await ctx.decideRoutine('2026-11-24',6,true);assert.equal(docs.get('logs/routine-2026-11-24-6').score,3);assert.equal(docs.get('logs/routine-2026-11-24-6').reason,'수학10문제 맞춤');
+ await ctx.decideRoutine('2026-11-24',6,true);assert.equal(docs.get('meta/state').lifetimeScore,3);
  console.log('PASS: routine time boundaries, backlog, atomic failure, reward effects, duplicate/skip protection and parent gate; no production writes');
 })().catch(e=>{console.error(e);process.exitCode=1;});

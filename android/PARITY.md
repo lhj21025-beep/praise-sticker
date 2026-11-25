@@ -49,3 +49,5 @@ Parent game notices live on the used item (`usedByRole`, `parentUseNoticeStatus`
 1.5.2: Both clients split excess earned points into new boards with the same target/reward, preserving effective dates, bonus records and lifetime points. Already-overfull viewed boards are repaired on parent load. Completion reward IDs remain deterministic. Native and web routine approval immediately displays saving state with retry on failure; removed the web manual-stamp 1-second cooldown. Network completion is not advertised as instantaneous.
 
 1.5.3: Removed web post-stamp UNDO banner and countdown timer, and native last-stamp undo button at user request. Existing history editing/deletion and penalty recovery remain intact.
+
+1.5.4: Routine counts resolve canonical reason names across whitespace/parentheses variants and the explicit 수학연산10문제맞춤 / 수학10문제맞춤 alias on both clients. Math default is 3 when no configured reason exists; configured counts take precedence. Invalid or conflicting counts fail visibly instead of silently granting one. Approval uses the matched reason name for mission bonuses. Historical awards are not modified.

@@ -1973,9 +1973,18 @@
 
     const ROUTINE_NAMES = ['기상시간 준수','등교준비시간 준수','상차리기 및 치우기','상차리기 및 치우기','약속시간준수(숙제)','취침시간 준수','수학연산 10문제 맞춤'];
     const ROUTINE_HOURS = [7,8,8,20,20,22,22];
+    function routineReasonKey(name) {
+      return String(name||'').normalize('NFKC').replace(/[\s()（）·ㆍ_-]+/g,'').replace(/^수학연산10문제맞춤$/, '수학10문제맞춤');
+    }
+    function routineReason(state,slot) {
+      const matches=(state.praiseReasons||[]).filter(r=>routineReasonKey(r.name)===routineReasonKey(ROUTINE_NAMES[slot]));
+      if(matches.length>1 && new Set(matches.map(r=>Number(r.count))).size>1)throw new Error(ROUTINE_NAMES[slot]+': 같은 사유의 스티커 개수가 서로 다릅니다. 사유 관리에서 확인해주세요.');
+      return matches[0]||{name:ROUTINE_NAMES[slot],count:slot===6?3:1};
+    }
     function routineCount(state, slot) {
-      const r=(state.praiseReasons||[]).find(r=>r.name.replace(/\s+/g,'')===ROUTINE_NAMES[slot].replace(/\s+/g,''));
-      return r ? Math.max(1,Math.min(100,Number(r.count)||1)) : 1;
+      const n=Number(routineReason(state,slot).count);
+      if(!Number.isInteger(n)||n<1||n>100)throw new Error(ROUTINE_NAMES[slot]+': 스티커 개수는 1~100개로 설정해주세요.');
+      return n;
     }
     function routineKey(day,slot){return `routine-${day}-${slot}`;}
     function dueRoutines(start, now, done) {
@@ -2055,7 +2064,7 @@
         const logs=(await Promise.all(logsSnap.docs.map(d=>tx.get(d.ref)))).filter(d=>d.exists).map(d=>d.data()).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
         const logRef=db.collection('logs').doc(key), existing=await tx.get(logRef);
         if(existing.exists){tx.set(ref,{routineStatus:'approved',day,slot,date:new Date().toISOString()});return;}
-        const count=routineCount(state,slot), reason=ROUTINE_NAMES[slot], score=count+(reason===state.dailyBuff?1:0);
+        const count=routineCount(state,slot), reason=routineReason(state,slot).name, score=count+(reason===state.dailyBuff?1:0);
         let streak=0;for(let i=logs.length-1;i>=0;i--){if(logs[i].executor==='시스템')continue;if(Number(logs[i].score)<=0)break;streak+=Number(logs[i].score);}
         const bonus=Math.floor((streak+score)/5)-Math.floor(streak/5), before=logs.reduce((n,l)=>n+Number(l.score),0), now=new Date();
         tx.set(logRef,{round,effectiveDate:day,date:now.toISOString(),reason:reason===state.dailyBuff?'🌟 [스페셜 미션 달성!] '+reason:reason,detail:'정기 칭찬 확인 · '+ROUTINE_HOURS[slot]+':00',executor:app.userName||'엄빠',score});

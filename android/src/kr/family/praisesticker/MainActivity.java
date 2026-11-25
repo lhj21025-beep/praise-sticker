@@ -654,7 +654,7 @@ public class MainActivity extends Activity {
     if(!s.parent || routineShown || dialogs>0 || busy) return;
     routineShown=true;
     run("정기 칭찬 확인 중…", () -> s.loadRoutines(), () -> {
-      if(!s.routinePending.isEmpty()) routineDialog();
+      if(!s.routinePending.isEmpty()) {try { for(JSONObject c:s.routinePending)Store.routineCount(s.state,c.optInt("slot"));routineDialog(); } catch(Exception e){error(e);} }
     });
   }
   void routineDialog() {
@@ -1667,7 +1667,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.5.3\n"
+            "칭찬 스티커 1.5.4\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",
