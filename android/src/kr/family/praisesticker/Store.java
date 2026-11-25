@@ -306,10 +306,11 @@ final class Store {
           if (amount < 0 && sum(l) <= 0) return;
           int score = routineSlot < 0 ? amount : routineCount(s, routineSlot);
           if (routineSlot >= 0) tx.set("meta/routine-" + effectiveDate + "-" + routineSlot, obj("routineStatus", "approved", "day", effectiveDate, "slot", routineSlot, "date", timestamp));
-          String label = reason;
-          if (score > 0 && reason.equals(s.optString("dailyBuff"))) {
+          String resolvedReason = routineSlot < 0 ? reason : routineReason(s,routineSlot).optString("name");
+          String label = resolvedReason;
+          if (score > 0 && resolvedReason.equals(s.optString("dailyBuff"))) {
             score++;
-            label = "🌟 [스페셜 미션 달성!] " + reason;
+            label = "🌟 [스페셜 미션 달성!] " + resolvedReason;
           }
           int before = streak(l), bonus = amount > 0 ? (before + score) / 5 - before / 5 : 0;
           tx.set(
@@ -373,13 +374,25 @@ final class Store {
   static final String[] ROUTINE_NAMES = {"기상시간 준수", "등교준비시간 준수", "상차리기 및 치우기", "상차리기 및 치우기", "약속시간준수(숙제)", "취침시간 준수", "수학연산 10문제 맞춤"};
   static final int[] ROUTINE_HOURS = {7,8,8,20,20,22,22};
   static String routineKey(String day, int slot) { return "routine-"+day+"-"+slot; }
-  static int routineCount(JSONObject state, int slot) {
+  static String routineReasonKey(String name) {
+    return java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFKC).replaceAll("[\\s()（）·ㆍ_-]+", "").replaceAll("^수학연산10문제맞춤$", "수학10문제맞춤");
+  }
+  static JSONObject routineReason(JSONObject state,int slot) {
+    JSONObject found=null;
     JSONArray reasons=array(state,"praiseReasons");
     for(int i=0;i<reasons.length();i++) {
       JSONObject r=reasons.optJSONObject(i);
-      if(r!=null && r.optString("name").replaceAll("\\s+", "").equals(ROUTINE_NAMES[slot].replaceAll("\\s+", ""))) return Math.max(1,Math.min(100,r.optInt("count",1)));
+      if(r!=null && routineReasonKey(r.optString("name")).equals(routineReasonKey(ROUTINE_NAMES[slot]))) {
+        if(found!=null && found.optDouble("count")!=r.optDouble("count"))throw new IllegalArgumentException(ROUTINE_NAMES[slot]+": 같은 사유의 스티커 개수가 서로 다릅니다. 사유 관리에서 확인해주세요.");
+        found=r;
+      }
     }
-    return 1;
+    return found==null?obj("name",ROUTINE_NAMES[slot],"count",slot==6?3:1):found;
+  }
+  static int routineCount(JSONObject state, int slot) {
+    double n=routineReason(state,slot).optDouble("count",Double.NaN);
+    if(!Double.isFinite(n)||n!=Math.floor(n)||n<1||n>100)throw new IllegalArgumentException(ROUTINE_NAMES[slot]+": 스티커 개수는 1~100개로 설정해주세요.");
+    return (int)n;
   }
   List<JSONObject> routinePending = new ArrayList<>();
   static List<JSONObject> dueRoutines(String start, ZonedDateTime now, Set<String> done) {
