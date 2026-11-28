@@ -432,6 +432,14 @@ public class StoreTest {
     s.addReason(false,"수학10문제 맞춤",3);s.decideRoutine("2026-11-24",6,true);
     check(db.docs.get("logs/routine-2026-11-24-6").optInt("score")==3,"math approval actually grants three");
     check(db.docs.get("logs/routine-2026-11-24-6").optString("reason").equals("수학10문제 맞춤"),"matched reason name retained");
+    db=new Fake();s=fixture(db);s.parent=false;
+    db.seed("items/coupon",Store.item(25,"게임시간 10분 추가","랜덤박스"));s.use("coupon",0,0);
+    check(db.docs.get("items/game-coupon-coupon").optString("type").equals("보상"),"coupon creates real reward");
+    check(Store.parentGameMinutes(db.docs.get("items/game-coupon-coupon"))==10,"coupon credits ten minutes");
+    s.use("coupon",0,0);check(db.docs.get("items/coupon").optString("status").equals("사용 후"),"coupon consumed once");
+    s.parent=true;db.seed("items/coupon2",Store.item(25,"게임 30분 추가","랜덤박스"));s.parentUseGame("coupon2",30,"교환");
+    check(Store.parentGameMinutes(db.docs.get("items/game-coupon-coupon2"))==30,"parent converts coupon");
+    s.parentUseGame("game-coupon-coupon2",10,"게임");check(Store.parentGameMinutes(db.docs.get("items/parent-remainder-game-coupon-coupon2"))==20,"actual game use reduces balance");
     System.out.println("PASS: " + checks + " checks; no production writes");
   }
 }

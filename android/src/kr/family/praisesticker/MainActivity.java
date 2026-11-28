@@ -713,7 +713,7 @@ public class MainActivity extends Activity {
   void items() {
     long totalMinutes = 0;
     for (JSONObject item : s.items)
-      if (item.optString("status").equals("사용 전") && (item.optString("type", "랜덤박스").equals("보상") || item.optString("type", "랜덤박스").equals("랜덤박스"))) totalMinutes += Store.parentGameMinutes(item);
+      if (item.optString("status").equals("사용 전") && item.optString("type", "랜덤박스").equals("보상")) totalMinutes += Store.parentGameMinutes(item);
     center(body, "🎒 보관함 " + String.format(java.util.Locale.KOREA, "%02d시간%02d분", totalMinutes / 60, totalMinutes % 60), 23, INK);
     buttons(
         body,
@@ -793,6 +793,7 @@ public class MainActivity extends Activity {
 
   void parentUseGameForm(JSONObject item) {
     int max = Store.parentGameMinutes(item);
+    if(item.optString("type").equals("랜덤박스") && max>0){LinearLayout f=col();EditText why=input(f,"교환 사유 (선택)","",false);AlertDialog d=dialog("게임시간 쿠폰 교환",f);btn(f,"보상함으로 교환",PURPLE,()->{String reason=why.getText().toString();d.dismiss();change("게임시간 교환",()->s.parentUseGame(item.optString("__id"),max,reason));});return;}
     if (!s.parent) return;
     LinearLayout c = col();
     add(c, text("사용한 게임 시간을 입력하세요. 남은 시간은 보관함에 유지되고 아들에게 알림이 전달됩니다.", 14, MUTED, false));
@@ -843,6 +844,7 @@ public class MainActivity extends Activity {
       roulette(i);
       return;
     }
+    if(i.optString("type").equals("랜덤박스") && Store.parentGameMinutes(i)>0){confirm("게임시간 쿠폰을 보상함의 게임시간으로 교환할까요?",()->change("게임시간 교환",()->s.use(itemId,0,0)));return;}
     if(Store.stickerRewardCount(i)>0){confirm("스티커 보상을 사용 요청할까요? 부모님이 확인하면 진행 중인 판에 지급됩니다.",()->change("스티커 보상 사용 요청",()->s.use(itemId,0,0)));return;}
     if (Store.retry(i)) {
       confirm("다시 돌리기를 사용하고 추첨권 1장을 받을까요?", () -> change("추첨권 지급", () -> s.use(itemId, 0, 0)));
@@ -1667,7 +1669,7 @@ public class MainActivity extends Activity {
     add(
         c,
         text(
-            "칭찬 스티커 1.5.4\n"
+            "칭찬 스티커 1.5.5\n"
                 + "네이티브 Android 앱 · WebView 미사용\n\n"
                 + "앱을 열 때, 작업 후, 화면을 보고 있는 동안 60초 간격으로 동기화합니다. 웹에서는 새로고침하면 최신 내용이 표시됩니다.\n\n"
                 + "화면과 테마는 네이티브로 다시 그렸으며 저장·공유 창은 Android 기본 화면입니다.",

@@ -485,7 +485,7 @@ final class Store {
 
   static int parentGameMinutes(JSONObject item) {
     if (item == null) return 0;
-    java.util.regex.Matcher m = java.util.regex.Pattern.compile("게임\\s*([1-9]\\d*)\\s*분").matcher(item.optString("name"));
+    java.util.regex.Matcher m = java.util.regex.Pattern.compile("게임(?:시간)?\\s*([1-9]\\d*)\\s*분").matcher(item.optString("name"));
     if (!m.find()) return 0;
     try { return Integer.parseInt(m.group(1)); } catch (NumberFormatException e) { return 0; }
   }
@@ -506,6 +506,11 @@ final class Store {
       if (!it.optString("status").equals("사용 전")) throw new Exception("이미 사용 처리된 보상입니다. 새로고침해주세요.");
       int max = parentGameMinutes(it);
       if (max == 0 || minutes > max) throw new Exception("보관함의 남은 게임 시간을 확인해주세요.");
+      if(it.optString("type").equals("랜덤박스")) {
+        JSONObject prior=tx.get("items/game-coupon-"+id);
+        if(prior==null){JSONObject reward=item(it.optInt("round"),"게임 "+max+"분","보상");put(reward,"gameMinutes",max);put(reward,"sourceGameCoupon",id);tx.set("items/game-coupon-"+id,reward);}
+        tx.patch(path,obj("status","사용 후","usedDate",now(),"usedByRole","parent","useReason",reason.trim(),"parentUseNoticeStatus","대기 중","parentUseNoticeText","부모님이 게임 "+max+"분 쿠폰을 게임시간 보상으로 교환했어요.","gameRewardId","game-coupon-"+id));return;
+      }
       if (minutes < max) {
         JSONObject remaining = new JSONObject(it.toString());
         for (String key : new String[]{"__id", "__path", "useReason", "usedByRole", "parentUseNoticeStatus", "parentUseNoticeText", "parentUseNoticeConfirmedAt"}) remaining.remove(key);
@@ -561,13 +566,14 @@ final class Store {
     String remainder = id + "-remainder", notification = "use-" + id;
     db.transaction(
         tx -> {
-          JSONObject it = tx.get("items/" + id), ticket = tx.get("items/retry_" + id);
+          JSONObject it = tx.get("items/" + id), ticket = tx.get("items/retry_" + id), gameReward=tx.get("items/game-coupon-" + id);
           if (it == null || !it.optString("status").equals("사용 전")) return;
           String name = it.optString("name");
           int stickerCount=stickerRewardCount(it);
           JSONObject update = obj("status", "사용 후", "usedDate", now());
           if(stickerCount>0){put(update,"stickerApprovalStatus","대기 중");put(update,"stickerCount",stickerCount);}
-          if (retry(it)) {
+          if(it.optString("type").equals("랜덤박스") && parentGameMinutes(it)>0){int minutes=parentGameMinutes(it);if(gameReward==null){JSONObject reward=item(it.optInt("round"),"게임 "+minutes+"분","보상");put(reward,"gameMinutes",minutes);put(reward,"sourceGameCoupon",id);tx.set("items/game-coupon-"+id,reward);}put(update,"gameRewardId","game-coupon-"+id);}
+          else if (retry(it)) {
             if (ticket == null) {
               JSONObject t = item(it.optInt("round"), "룰렛 추첨권", "랜덤박스");
               put(t, "prizesSnapshot", it.optString("prizesSnapshot"));
