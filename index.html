@@ -1097,7 +1097,7 @@
 
     // Parent game redemption and its child notice share one atomic item update.
     function parentGameMinutes(item) {
-      const m = String(item && item.name || '').match(/게임\s*([1-9]\d*)\s*분/);
+      const m = String(item && item.name || '').match(/게임(?:시간)?\s*([1-9]\d*)\s*분/);
       return m && Number.isSafeInteger(Number(m[1])) ? Number(m[1]) : 0;
     }
 
@@ -1115,6 +1115,11 @@
         const max = parentGameMinutes(item);
         if (!max || minutes > max) throw new Error('보관함의 남은 게임 시간을 확인해주세요.');
         const now = new Date().toISOString();
+        if(item.type==='랜덤박스') {
+          const rewardRef=db.collection('items').doc('game-coupon-'+itemId), prior=await tx.get(rewardRef);
+          if(!prior.exists)tx.set(rewardRef,{round:item.round,name:'게임 '+max+'분',type:'보상',status:'사용 전',usedDate:'',obtainedDate:now,gameMinutes:max,sourceGameCoupon:itemId});
+          tx.update(ref,{status:'사용 후',usedDate:now,usedByRole:'parent',useReason:String(reason).trim(),parentUseNoticeStatus:'대기 중',parentUseNoticeText:'부모님이 게임 '+max+'분 쿠폰을 게임시간 보상으로 교환했어요.',gameRewardId:rewardRef.id});return;
+        }
         const nameWithMinutes = n => item.name.replace(/(게임\s*)[1-9]\d*(\s*분)/, (_, a, b) => a + n + b);
         if (minutes < max) {
           const remaining = { ...item, name: nameWithMinutes(max - minutes), status: '사용 전', usedDate: '', gameMinutes: max - minutes };
@@ -1190,10 +1195,14 @@
         const retry = isRouletteRetry(it);
         const stickerCount = stickerRewardCount(it);
         const existingTicket = retry ? await tx.get(ticketRef) : null;
+        const gameCoupon=it.type==='랜덤박스' && parentGameMinutes(it)>0;
+        const gameRef=db.collection('items').doc('game-coupon-'+itemId);
+        const existingGame=gameCoupon?await tx.get(gameRef):null;
         const now = new Date().toISOString();
         let usedName = it.name;
         const isGameRollover = !!it.gameRollover || /게임\s*\d+\s*분.*이월/.test(String(it.name || ''));
-        if (retry) {
+        if(gameCoupon){if(!existingGame.exists)tx.set(gameRef,{round:it.round,name:'게임 '+parentGameMinutes(it)+'분',type:'보상',status:'사용 전',usedDate:'',obtainedDate:now,gameMinutes:parentGameMinutes(it),sourceGameCoupon:itemId});}
+        else if (retry) {
           if (!existingTicket.exists) tx.set(ticketRef, {
             round: it.round, name: '룰렛 추첨권', obtainedDate: now,
             status: '사용 전', usedDate: '', type: '랜덤박스',
@@ -1213,6 +1222,7 @@
         tx.update(ref, {
           name: usedName, status:'사용 후', usedDate: now,
           ...(retry ? { replacementTicketId: ticketRef.id } : {}),
+          ...(gameCoupon ? {gameRewardId:gameRef.id} : {}),
           ...(stickerCount ? { stickerApprovalStatus: '대기 중', stickerCount } : {}),
           ...(isGameRollover && useAmount ? { gameRollover: true, gameMinutes: useAmount } : {})
         });
@@ -3540,7 +3550,7 @@
       const statusFilter = currentItemTab === 'unused' ? '사용 전' : '사용 후';
       const filtered = app.items.filter(i => i.status === statusFilter && i.type === currentBoxType);
       if (statusFilter === '사용 후') filtered.sort((a,b) => (b.usedTimestamp || 0) - (a.usedTimestamp || 0));
-      const totalMinutes = app.items.filter(i => i.status === '사용 전' && ['보상','랜덤박스'].includes(i.type)).reduce((sum,i) => sum + parentGameMinutes(i), 0);
+      const totalMinutes = app.items.filter(i => i.status === '사용 전' && i.type === '보상').reduce((sum,i) => sum + parentGameMinutes(i), 0);
       document.getElementById('unusedGameTotal').innerText = String(Math.floor(totalMinutes / 60)).padStart(2,'0') + '시간' + String(totalMinutes % 60).padStart(2,'0') + '분';
 
       // 🔢 사용 전/사용 후 탭 옆에 현재 보상함(또는 랜덤박스) 기준 개수 표시
@@ -3593,6 +3603,7 @@
       if (!app.isParent || !item) return;
       const reason = prompt('사용 처리 사유를 남겨주세요. (선택)', '');
       if (reason === null) return;
+      if(item.type === '랜덤박스' && max){if(!confirm('게임 '+max+'분 쿠폰을 보상함으로 교환할까요?'))return;btn.disabled=true;google.script.run.withSuccessHandler(res=>{app=res;renderItems();showToast('게임시간 보상으로 교환했어요.');}).withFailureHandler(err=>{btn.disabled=false;showToast(err.message);}).parentUseGame(id,max,currentRole,reason);return;}
       if (!max) {
         if (!confirm('[' + item.name + '] 보상을 사용 처리할까요?')) return;
         btn.disabled = true;
@@ -3615,6 +3626,8 @@
     function handleItemClick(id, name, btn) {
       if (name === '룰렛 추첨권') {
         openRoulette(id);
+      } else if (((app.items || []).find(i => i.id === id) || {}).type === '랜덤박스' && parentGameMinutes((app.items || []).find(i => i.id === id))) {
+        if(confirm('게임시간 쿠폰을 보상함의 게임시간으로 교환할까요?')) callUseSplitApi(id,btn,null,null);
       } else if (stickerRewardCount((app.items || []).find(i => i.id === id))) {
         if (!confirm('스티커 보상을 사용 요청할까요? 부모님이 확인하면 진행 중인 판에 지급됩니다.')) return;
         callUseSplitApi(id, btn, null, null);
